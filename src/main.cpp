@@ -18,6 +18,7 @@
 #include <commctrl.h>
 
 #include "capture_wgc.h"
+#include "capture_dxgi.h"
 #include "gl_texture.h"
 
 #define GLFW_INCLUDE_NONE
@@ -228,6 +229,16 @@ int main(int argc, char* argv[]) {
         idleSec = atoi(argv[2]);
         if (idleSec < 10) idleSec = 10;
     }
+    // Capture mode: "wgc" or "dxgi" (default: dxgi 鈥?more stable)
+    bool useWGC = false;
+    if (argc > 1) {
+        for (int i = 1; i < argc; i++) {
+            if (strcmp(argv[i], "wgc") == 0) useWGC = true;
+            else if (strcmp(argv[i], "dxgi") == 0) useWGC = false;
+        }
+    }
+    fprintf(stderr, "Blackhole: capture=%s\n", useWGC ? "WGC" : "DXGI");
+
     if (bhMode == MODE_OFF) {
         fprintf(stderr, "Blackhole: MODE_OFF, exiting.\n");
         return 0;
@@ -300,24 +311,36 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // ---- WGC capture init ----
+    // ---- Capture init (WGC or DXGI) ----
     WGCCapture wgc;
-    bool capOk = WGC_Init(wgc);
+    DXGICapture dxgi;
+    int capWidth = 0, capHeight = 0;
+    bool capOk = false;
+
+    if (useWGC) {
+        capOk = WGC_Init(wgc);
+        capWidth = wgc.width;
+        capHeight = wgc.height;
+    } else {
+        capOk = DXGI_Init(dxgi);
+        capWidth = dxgi.width;
+        capHeight = dxgi.height;
+    }
     if (!capOk) {
-        fprintf(stderr, "FATAL: WGC capture init failed\n");
+        fprintf(stderr, "FATAL: Capture init failed\n");
         glfwTerminate();
         return 1;
     }
 
-    // ---- PBO texture upload init ----
+    // ---- Texture upload init ----
     GLTextureUpload glTex;
-    if (!GLTex_Init(glTex, wgc.width, wgc.height)) {
-        fprintf(stderr, "FATAL: PBO texture init failed\n");
-        WGC_Release(wgc);
+    if (!GLTex_Init(glTex, capWidth, capHeight)) {
+        fprintf(stderr, "FATAL: Texture init failed\n");
+        if (useWGC) WGC_Release(wgc);
+        else        DXGI_Release(dxgi);
         glfwTerminate();
         return 1;
     }
-
     // ---- Shader compilation (GLSL only, no SPIR-V) ----
     std::string vertSrc = readFile("shaders/vert.glsl");
     if (vertSrc.empty()) {
@@ -410,8 +433,8 @@ int main(int argc, char* argv[]) {
         glfwGetFramebufferSize(window, &fbW, &fbH);
         glViewport(0, 0, fbW, fbH);
 
-        // ---- WGC capture -> PBO upload ----
-        ID3D11Texture2D* frame = WGC_GetFrame(wgc);
+        // ---- Capture -> upload (WGC or DXGI) ----
+        ID3D11Texture2D* frame = useWGC ? WGC_GetFrame(wgc) : DXGI_GetFrame(dxgi);
         if (frame) {
             // Micro-delay: let GPU compositor finish large screen updates
             D3D11_TEXTURE2D_DESC desc;
@@ -431,6 +454,7 @@ int main(int argc, char* argv[]) {
                 }
             }
             frame->Release();
+            if (!useWGC) DXGI_ReleaseFrame(dxgi);
         }
 
         // Update uniforms
@@ -471,7 +495,8 @@ int main(int argc, char* argv[]) {
 
     // Cleanup
     GLTex_Shutdown(glTex);
-    WGC_Release(wgc);
+    if (useWGC) WGC_Release(wgc);
+    else        DXGI_Release(dxgi);
     gl_DeleteProgram(program);
     gl_DeleteVertexArrays(1, &vao);
     gl_DeleteBuffers(1, &vbo);
