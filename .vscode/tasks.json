@@ -54,8 +54,7 @@
              ],
              "group": "none",
              "presentation": {
-                 "reveal": "silent",
-                 "panel": "new"
+                 "reveal": "silent"
              },
              "problemMatcher": {
                  "owner": "cpp",
@@ -69,6 +68,31 @@
                      "message": 5
                  }
              }
+         },
+         {
+             "label": "Run Always",
+             "type": "shell",
+             "command": "${workspaceFolder}/build/blackhole.exe",
+             "args": ["always"],
+             "group": "none",
+             "presentation": { "reveal": "never" },
+             "problemMatcher": []
+         },
+         {
+             "label": "Run Idle (5min)",
+             "type": "shell",
+             "command": "${workspaceFolder}/build/blackhole.exe",
+             "args": ["idle", "300"],
+             "group": "none",
+             "presentation": { "reveal": "never" },
+             "problemMatcher": []
+         },
+         {
+             "label": "Kill Blackhole",
+             "type": "shell",
+             "command": "taskkill /f /im blackhole.exe",
+             "group": "none",
+             "problemMatcher": []
          }
      ]
  }

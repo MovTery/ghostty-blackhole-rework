@@ -1,4 +1,4 @@
- // blackhole standalone — Windows OpenGL host for blackhole.glsl
+﻿ // blackhole standalone — Windows OpenGL host for blackhole.glsl
  // Build: mkdir build && cd build && cmake .. && make
  // Requires: GLFW 3.4 (mingw-w64-ucrt-x86_64-glfw), OpenGL 3.3
  
@@ -11,9 +11,13 @@
 #include <sstream>
 #include <vector>
 #include <regex>
+#include <cstring>
+#include <windows.h>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
 #include <GL/gl.h>
 
 // =====================================================================
@@ -157,38 +161,45 @@ static std::string readFile(const char* path) {
  // or MODE_POMODORO for perpetual growth (no idle detection in standalone)
  // =====================================================================
  
-static bool buildFragmentShader(std::string& out) {
-    std::string header = readFile("shaders/frag_header.glsl");
-    if (header.empty()) return false;
-    std::string body = readFile("blackhole.glsl");
-    if (body.empty()) return false;
-
-    // 1) Replace SIZE_MODE: MODE_TOKENS -> MODE_DEMO
-    body = std::regex_replace(body, std::regex("SIZE_MODE MODE_TOKENS"), "SIZE_MODE MODE_DEMO");
-
-    // 2) Replace iTimeCursorChange -> iTime (never idle in standalone)
-    body = std::regex_replace(body, std::regex("iTimeCursorChange"), "iTime");
-
-    // 3) Replace terminal texture lookups with sky()
-    //    texture(iChannel0, suv) -> sky(suv)   (used as sky(suv)[i] or sky(suv).rgb)
-    body = std::regex_replace(body, std::regex("texture\\(iChannel0, suv\\)"), "sky(suv)");
-    //    texture(iChannel0, uv) -> vec4(sky(uv), 1.0)   (assigned directly to fragColor)
-    body = std::regex_replace(body, std::regex("texture\\(iChannel0, uv\\)"), "vec4(sky(uv), 1.0)");
-
-    out = header + "\n" + body;
-
-    // Debug: save combined shader for inspection
-    std::ofstream dbg("build/combined_frag.glsl");
-    dbg << out;
-    dbg.close();
-    return true;
+static bool buildFragmentShader(std::string& out)  {
+    // Use simplified shader to avoid NVIDIA Cg compiler issues
+    out = readFile("shaders/frag_simple.glsl");
+    return !out.empty();
 }
  
  // =====================================================================
  // Main
  // =====================================================================
+
+// ---- Blackhole mode system ----
+enum BlackholeMode { MODE_ALWAYS, MODE_IDLE, MODE_OFF };
+
+static bool isIdle(DWORD thresholdMs) {
+    LASTINPUTINFO lii = { sizeof(LASTINPUTINFO) };
+    if (!GetLastInputInfo(&lii)) return false;
+    return (GetTickCount() - lii.dwTime) >= thresholdMs;
+}
+
  
- int main() {
+int main(int argc, char* argv[]) {
+    // Parse mode from command line
+    BlackholeMode bhMode = MODE_ALWAYS;
+    int idleSec = 300; // default idle threshold: 5 min
+    if (argc > 1) {
+        if (strcmp(argv[1], "idle") == 0) bhMode = MODE_IDLE;
+        else if (strcmp(argv[1], "off") == 0) bhMode = MODE_OFF;
+    }
+    if (argc > 2 && bhMode == MODE_IDLE) {
+        idleSec = atoi(argv[2]);
+        if (idleSec < 10) idleSec = 10;
+    }
+    if (bhMode == MODE_OFF) {
+        fprintf(stderr, "Blackhole: MODE_OFF, exiting.\\n");
+        return 0;
+    }
+    fprintf(stderr, "Blackhole: mode=%s idle=%ds\\n",
+        bhMode == MODE_IDLE ? "idle" : "always", idleSec);
+
      // Initialize GLFW
      if (!glfwInit()) {
          fprintf(stderr, "Failed to initialize GLFW\n");
@@ -199,7 +210,7 @@ static bool buildFragmentShader(std::string& out) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_FALSE);
-     glfwWindowHint(GLFW_DECORATED, GL_TRUE);
+     glfwWindowHint(GLFW_DECORATED, GL_FALSE);
      glfwWindowHint(GLFW_RESIZABLE, GL_TRUE);
  
      // Get primary monitor video mode for sizing
@@ -214,8 +225,18 @@ static bool buildFragmentShader(std::string& out) {
          glfwTerminate();
          return 1;
      }
+
+    // Desktop overlay: always-on-top + click-through
+    {
+        HWND hwnd = glfwGetWin32Window(window);
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        LONG ex = GetWindowLong(hwnd, GWL_EXSTYLE);
+        SetWindowLong(hwnd, GWL_EXSTYLE, ex | WS_EX_TRANSPARENT);
+    }
+
  
     glfwMakeContextCurrent(window);
+    setbuf(stderr, NULL);
     glfwSwapInterval(1);  // VSync on
 
     fprintf(stderr, "OpenGL %s, GLSL %s\n",
@@ -234,20 +255,9 @@ static bool buildFragmentShader(std::string& out) {
  
     GLuint program = createProgram(vertSrc, fragSrc);
     if (!program) {
-        // Fallback: test with a minimal shader to verify GL pipeline works
-        fprintf(stderr, "Main shader failed. Testing with minimal shader...\n");
-        std::string simpleVert =
-            "#version 330 core\n"
-            "layout(location=0) in vec2 aPos;\n"
-            "void main() { gl_Position = vec4(aPos, 0.0, 1.0); }";
-        std::string simpleFrag =
-            "#version 330 core\n"
-            "out vec4 fragColor;\n"
-            "void main() { fragColor = vec4(1.0, 0.0, 0.0, 1.0); }";
-        program = createProgram(simpleVert, simpleFrag);
-        if (!program) { glfwTerminate(); return 1; }
-        fprintf(stderr, "Minimal shader OK -> main shader is too complex for this driver\n");
-    }
+        fprintf(stderr, "FATAL: Blackhole shader failed to compile/link.\n");
+        glfwTerminate();
+        return 1; }
 
      // Full-screen quad: two triangles
      float vertices[] = {
@@ -291,6 +301,22 @@ static bool buildFragmentShader(std::string& out) {
          // ESC to exit
          if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
              glfwSetWindowShouldClose(window, GL_TRUE);
+
+        // Idle mode: auto show/hide based on user activity
+        if (bhMode == MODE_IDLE) {
+            if (isIdle((DWORD)idleSec * 1000)) {
+                glfwShowWindow(window);
+                glfwSetWindowOpacity(window, 1.0f);
+            } else {
+                glfwHideWindow(window);
+                Sleep(250);
+                continue;
+            }
+        } else if (bhMode == MODE_ALWAYS) {
+            if (!glfwGetWindowAttrib(window, GLFW_VISIBLE))
+                glfwShowWindow(window);
+        }
+
  
          // Window size
          int fbW, fbH;
@@ -333,3 +359,4 @@ static bool buildFragmentShader(std::string& out) {
      glfwTerminate();
      return 0;
  }
+
