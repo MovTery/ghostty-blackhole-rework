@@ -29,6 +29,8 @@ target_link_libraries(blackhole PRIVATE
     dxgi
     gdi32
     runtimeobject
+    dwmapi
+    comctl32
 )
 
 # Compile with MSYS2 GCC (ucrt64)

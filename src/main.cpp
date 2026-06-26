@@ -14,6 +14,8 @@
 #include <cstring>
 #include <windows.h>
 #include <d3d11.h>
+#include <dwmapi.h>
+#include <commctrl.h>
 
 #include "capture_wgc.h"
 #include "gl_texture.h"
@@ -183,6 +185,21 @@ static bool buildFragmentShader(std::string& out) {
     return true;
 }
 
+
+// ---- Window subclass: block DWM non-client activation (kills yellow border) ----
+static LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
+                                        UINT_PTR idSubclass, DWORD_PTR refData) {
+    switch (msg) {
+    case WM_NCACTIVATE:
+        // Tell DWM "this window is never active" 鈥?prevents the yellow
+        // focus-loss border from appearing when switching to other apps.
+        return FALSE;
+    case WM_MOUSEACTIVATE:
+        // Prevent any mouse interaction from activating the window.
+        return MA_NOACTIVATEANDEAT;
+    }
+    return DefSubclassProc(hwnd, msg, wp, lp);
+}
 // =====================================================================
 // Mode system
 // =====================================================================
@@ -250,10 +267,24 @@ int main(int argc, char* argv[]) {
     {
         HWND hwnd = glfwGetWin32Window(window);
         SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         LONG ex = GetWindowLong(hwnd, GWL_EXSTYLE);
-        SetWindowLong(hwnd, GWL_EXSTYLE, ex | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW );
+        SetWindowLong(hwnd, GWL_EXSTYLE, ex | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED );
         // Exclude from WGC/DXGI capture (prevents feedback loop)
         SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+        // Remove DWM frame borders (fullscreen borderless overlay)
+        {
+            MARGINS margins = {-1, -1, -1, -1};
+            DwmExtendFrameIntoClientArea(hwnd, &margins);
+        }
+        // Subclass window to block WM_NCACTIVATE (prevents DWM focus-loss border)
+        SetWindowSubclass(hwnd, OverlayWndProc, 1, 0);
+        // Tell DWM to never draw non-client area (borders, focus visuals)
+        {
+            DWMNCRENDERINGPOLICY ncrp = DWMNCRP_DISABLED;
+            DwmSetWindowAttribute(hwnd, DWMWA_NCRENDERING_POLICY,
+                                  &ncrp, sizeof(ncrp));
+        }
         // Make black pixels transparent
     }
 
@@ -362,16 +393,16 @@ int main(int argc, char* argv[]) {
         // Idle mode
         if (bhMode == MODE_IDLE) {
             if (isIdle((DWORD)idleSec * 1000)) {
-                glfwShowWindow(window);
+                ShowWindow(glfwGetWin32Window(window), SW_SHOWNOACTIVATE);
                 glfwSetWindowOpacity(window, 1.0f);
             } else {
-                glfwHideWindow(window);
+                ShowWindow(glfwGetWin32Window(window), SW_HIDE);
                 Sleep(250);
                 continue;
             }
         } else if (bhMode == MODE_ALWAYS) {
             if (!glfwGetWindowAttrib(window, GLFW_VISIBLE))
-                glfwShowWindow(window);
+                ShowWindow(glfwGetWin32Window(window), SW_SHOWNOACTIVATE);
         }
 
         // Window / framebuffer size
