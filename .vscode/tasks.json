@@ -1,98 +1,119 @@
- {
-     "version": "2.0.0",
-     "tasks": [
-         {
-             "label": "build-debug",
-             "type": "shell",
-             "command": "C:\\msys64\\ucrt64\\bin\\g++.exe",
-             "args": [
-                 "-std=c++17",
-                 "-g",
-                 "-O0",
-                 "-o",
-                 "${workspaceFolder}/build/blackhole.exe",
-                 "${workspaceFolder}/src/main.cpp",
-                 "-IC:/msys64/ucrt64/include",
-                 "-LC:/msys64/ucrt64/lib",
-                 "-lglfw3", "-lopengl32", "-lgdi32"
-             ],
-             "group": {
-                 "kind": "build",
-                 "isDefault": true
-             },
-             "presentation": {
-                 "reveal": "always",
-                 "panel": "new"
-             },
-             "problemMatcher": {
-                 "owner": "cpp",
-                 "fileLocation": "absolute",
-                 "pattern": {
-                     "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                     "file": 1,
-                     "line": 2,
-                     "column": 3,
-                     "severity": 4,
-                     "message": 5
-                 }
-             }
-         },
-         {
-             "label": "build-release",
-             "type": "shell",
-             "command": "C:\\msys64\\ucrt64\\bin\\g++.exe",
-             "args": [
-                 "-std=c++17",
-                 "-O2",
-                 "-o",
-                 "${workspaceFolder}/build/blackhole.exe",
-                 "${workspaceFolder}/src/main.cpp",
-                 "-IC:/msys64/ucrt64/include",
-                 "-LC:/msys64/ucrt64/lib",
-                 "-lglfw3", "-lopengl32", "-lgdi32",
-                 "-mwindows"
-             ],
-             "group": "none",
-             "presentation": {
-                 "reveal": "silent"
-             },
-             "problemMatcher": {
-                 "owner": "cpp",
-                 "fileLocation": "absolute",
-                 "pattern": {
-                     "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                     "file": 1,
-                     "line": 2,
-                     "column": 3,
-                     "severity": 4,
-                     "message": 5
-                 }
-             }
-         },
-         {
-             "label": "Run Always",
-             "type": "shell",
-             "command": "${workspaceFolder}/build/blackhole.exe",
-             "args": ["always"],
-             "group": "none",
-             "presentation": { "reveal": "never" },
-             "problemMatcher": []
-         },
-         {
-             "label": "Run Idle (5min)",
-             "type": "shell",
-             "command": "${workspaceFolder}/build/blackhole.exe",
-             "args": ["idle", "300"],
-             "group": "none",
-             "presentation": { "reveal": "never" },
-             "problemMatcher": []
-         },
-         {
-             "label": "Kill Blackhole",
-             "type": "shell",
-             "command": "taskkill /f /im blackhole.exe",
-             "group": "none",
-             "problemMatcher": []
-         }
-     ]
- }
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-debug",
+            "type": "shell",
+            "command": "C:\\msys64\\ucrt64\\bin\\g++.exe",
+            "args": [
+                "-std=c++17",
+                "-g",
+                "-O0",
+                "-o",
+                "${workspaceFolder}/build/blackhole.exe",
+                "${workspaceFolder}/src/main.cpp",
+                "${workspaceFolder}/src/screen_capture.cpp",
+                "${workspaceFolder}/src/gl_interop.cpp",
+                "-IC:/msys64/ucrt64/include",
+                "-LC:/msys64/ucrt64/lib",
+                "-lglfw3",
+                "-lopengl32",
+                "-lgdi32",
+                "-ld3d11",
+                "-ldxgi"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": {
+                "owner": "cpp",
+                "fileLocation": "absolute",
+                "pattern": {
+                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            }
+        },
+        {
+            "label": "build-release",
+            "type": "shell",
+            "command": "C:\\msys64\\ucrt64\\bin\\g++.exe",
+            "args": [
+                "-std=c++17",
+                "-O2",
+                "-o",
+                "${workspaceFolder}/build/blackhole.exe",
+                "${workspaceFolder}/src/main.cpp",
+                "${workspaceFolder}/src/screen_capture.cpp",
+                "${workspaceFolder}/src/gl_interop.cpp",
+                "-IC:/msys64/ucrt64/include",
+                "-LC:/msys64/ucrt64/lib",
+                "-lglfw3",
+                "-lopengl32",
+                "-lgdi32",
+                "-ld3d11",
+                "-ldxgi",
+                "-mwindows"
+            ],
+            "group": "none",
+            "presentation": {
+                "reveal": "silent"
+            },
+            "problemMatcher": {
+                "owner": "cpp",
+                "fileLocation": "absolute",
+                "pattern": {
+                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            }
+        },
+        {
+            "label": "Run Always",
+            "type": "shell",
+            "command": "${workspaceFolder}/build/blackhole.exe",
+            "args": [
+                "always"
+            ],
+            "group": "none",
+            "presentation": {
+                "reveal": "never"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Idle (5min)",
+            "type": "shell",
+            "command": "${workspaceFolder}/build/blackhole.exe",
+            "args": [
+                "idle",
+                "300"
+            ],
+            "group": "none",
+            "presentation": {
+                "reveal": "never"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Kill Blackhole",
+            "type": "shell",
+            "command": "taskkill /f /im blackhole.exe",
+            "group": "none",
+            "problemMatcher": []
+        }
+    ]
+}

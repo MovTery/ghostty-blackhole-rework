@@ -1,4 +1,4 @@
-﻿ // blackhole standalone — Windows OpenGL host for blackhole.glsl
+ // blackhole standalone ? Windows OpenGL host for blackhole.glsl
  // Build: mkdir build && cd build && cmake .. && make
  // Requires: GLFW 3.4 (mingw-w64-ucrt-x86_64-glfw), OpenGL 3.3
  
@@ -13,6 +13,9 @@
 #include <regex>
 #include <cstring>
 #include <windows.h>
+
+#include "screen_capture.h"
+#include "gl_interop.h"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -47,6 +50,8 @@
  DECL_GL_FUNC(GLint,  GetUniformLocation, (GLuint, const GLchar*));
  DECL_GL_FUNC(void,   Uniform3f, (GLint, GLfloat, GLfloat, GLfloat));
  DECL_GL_FUNC(void,   Uniform1f, (GLint, GLfloat));
+DECL_GL_FUNC(void,   Uniform1i, (GLint, GLint));
+DECL_GL_FUNC(void,   ActiveTexture, (GLenum));
  DECL_GL_FUNC(void,   Uniform4f, (GLint, GLfloat, GLfloat, GLfloat, GLfloat));
  DECL_GL_FUNC(void,   GenVertexArrays, (GLsizei, GLuint*));
  DECL_GL_FUNC(void,   GenBuffers, (GLsizei, GLuint*));
@@ -81,6 +86,8 @@
      LOAD_GL_FUNC(GetUniformLocation);
      LOAD_GL_FUNC(Uniform3f);
      LOAD_GL_FUNC(Uniform1f);
+    LOAD_GL_FUNC(Uniform1i);
+    LOAD_GL_FUNC(ActiveTexture);
      LOAD_GL_FUNC(Uniform4f);
      LOAD_GL_FUNC(GenVertexArrays);
      LOAD_GL_FUNC(GenBuffers);
@@ -161,10 +168,21 @@ static std::string readFile(const char* path) {
  // or MODE_POMODORO for perpetual growth (no idle detection in standalone)
  // =====================================================================
  
-static bool buildFragmentShader(std::string& out)  {
-    // Use simplified shader to avoid NVIDIA Cg compiler issues
-    out = readFile("shaders/frag_simple.glsl");
-    return !out.empty();
+
+static bool buildFragmentShader(std::string& out) {
+    // Compose full blackhole.glsl for desktop: header + physics core + main() wrapper
+    std::string header = readFile("shaders/frag_desktop_header.glsl");
+    std::string body   = readFile("blackhole.glsl");
+    if (header.empty() || body.empty()) return false;
+
+    // Override SIZE_MODE: use MODE_DEMO (42s self-running showcase loop)
+    size_t pos = body.find("#define SIZE_MODE MODE_TOKENS");
+    if (pos != std::string::npos)
+        body.replace(pos, 29, "#define SIZE_MODE MODE_DEMO");
+
+    out = header + "\n// ===== blackhole.glsl core =====\n" + body +
+          "\nvoid main() { vec4 c; mainImage(c, gl_FragCoord.xy); fragColor = c; }\n";
+    return true;
 }
  
  // =====================================================================
@@ -216,10 +234,11 @@ int main(int argc, char* argv[]) {
      // Get primary monitor video mode for sizing
      GLFWmonitor* monitor = glfwGetPrimaryMonitor();
      const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-     int winW = mode->width * 3 / 4;
-     int winH = mode->height * 3 / 4;
+     int winW = mode->width;
+     int winH = mode->height;
  
      GLFWwindow* window = glfwCreateWindow(winW, winH, "Black Hole (ESC to exit)", nullptr, nullptr);
+    glfwSetWindowPos(window, 0, 0);
      if (!window) {
          fprintf(stderr, "Failed to create window\n");
          glfwTerminate();
@@ -246,6 +265,20 @@ int main(int argc, char* argv[]) {
          glfwTerminate();
          return 1;
      }
+
+    // ---- Initialize DXGI desktop capture + WGL interop (zero-copy) ----
+    ScreenCapture screenCap;
+    GLInterop glInterop;
+    if (scInit(screenCap)) {
+        if (giInit(glInterop, screenCap.d3dDev, screenCap.d3dCtx,
+                   screenCap.width, screenCap.height)) {
+            ID3D11Texture2D* firstFrame = nullptr;
+            if (scAcquireFrame(screenCap, firstFrame) && firstFrame) {
+                giUpdate(glInterop, firstFrame);
+                firstFrame->Release();
+            }
+        }
+    }
  
      // Build and compile shaders
      std::string vertSrc = readFile("shaders/vert.glsl");
@@ -253,11 +286,67 @@ int main(int argc, char* argv[]) {
      std::string fragSrc;
      if (!buildFragmentShader(fragSrc)) { glfwTerminate(); return 1; }
  
-    GLuint program = createProgram(vertSrc, fragSrc);
+    // === SPIR-V fragment shader (bypasses NVIDIA Cg compiler) ===
+    const GLenum SPIRV_FORMAT = 0x9551; // GL_SHADER_BINARY_FORMAT_SPIR_V
+    typedef void (WINAPI *SPIRV_BIN_FN)(GLsizei,const GLuint*,GLenum,const void*,GLsizei);
+    typedef void (WINAPI *SPIRV_SPEC_FN)(GLuint,const GLchar*,GLuint,const GLuint*,const GLuint*);
+
+    GLuint program = 0;
+    {
+        std::string glsl;
+        if (buildFragmentShader(glsl)) {
+            { std::ofstream f("build/temp_shader.glsl"); f << glsl; }
+            std::string cmd = "C:/msys64/ucrt64/bin/glslangValidator.exe -G -S frag"
+                " -o build/temp_shader.spv build/temp_shader.glsl 2>nul";
+            int spv_ret = system(cmd.c_str());
+
+            if (spv_ret == 0) {
+                std::ifstream spf("build/temp_shader.spv", std::ios::binary|std::ios::ate);
+                std::streamsize sz = spf.tellg(); spf.seekg(0);
+                std::vector<char> spv((size_t)sz);
+                if (spf.read(spv.data(), sz)) {
+                    auto binFn = (SPIRV_BIN_FN)glfwGetProcAddress("glShaderBinary");
+                    auto specFn = (SPIRV_SPEC_FN)glfwGetProcAddress("glSpecializeShader");
+                    if (binFn && specFn) {
+                        GLuint fsh = gl_CreateShader(GL_FRAGMENT_SHADER);
+                        GLuint ids[] = { fsh };
+                        binFn(1, ids, SPIRV_FORMAT, spv.data(), (GLint)sz);
+                        specFn(fsh, "main", 0, nullptr, nullptr);
+                        GLint ok = 0; gl_GetShaderiv(fsh, GL_COMPILE_STATUS, &ok);
+                        if (ok) {
+                            program = gl_CreateProgram();
+                            GLuint vs = compileShader(GL_VERTEX_SHADER, vertSrc);
+                            if (vs) {
+                                gl_AttachShader(program, vs); gl_AttachShader(program, fsh);
+                                gl_LinkProgram(program); gl_GetProgramiv(program, GL_LINK_STATUS, &ok);
+                                if (!ok) {
+                                    char lg[4096]; gl_GetProgramInfoLog(program,sizeof(lg),nullptr,lg);
+                                    fprintf(stderr,"SPIR-V link error: %s\n",lg);
+                                    gl_DeleteProgram(program); program=0;
+                                }
+                                gl_DeleteShader(vs);
+                            }
+                            gl_DeleteShader(fsh);
+                        } else {
+                            char lg[4096]; gl_GetShaderInfoLog(fsh,sizeof(lg),nullptr,lg);
+                            fprintf(stderr,"SPIR-V spec error: %s\n",lg); gl_DeleteShader(fsh);
+                        }
+                    }
+                } std::remove("build/temp_shader.spv");
+            } else { fprintf(stderr,"SPIR-V compile failed, using GLSL fallback\n"); }
+            std::remove("build/temp_shader.glsl");
+        }
+    }
+    // Fallback: GLSL compilation if SPIR-V failed
     if (!program) {
-        fprintf(stderr, "FATAL: Blackhole shader failed to compile/link.\n");
-        glfwTerminate();
-        return 1; }
+        std::string glsl;
+        if (buildFragmentShader(glsl)) program = createProgram(vertSrc, glsl);
+    }
+    if (!program) {
+        fprintf(stderr, "FATAL: No shader program available.\n");
+        glfwTerminate(); return 1;
+    }
+
 
      // Full-screen quad: two triangles
      float vertices[] = {
@@ -287,6 +376,7 @@ int main(int argc, char* argv[]) {
      GLint locResolution = gl_GetUniformLocation(program, "iResolution");
      GLint locTime       = gl_GetUniformLocation(program, "iTime");
      GLint locDate       = gl_GetUniformLocation(program, "iDate");
+    GLint locChannel0   = gl_GetUniformLocation(program, "iChannel0");
      gl_UseProgram(0);
  
      // Main loop
@@ -323,13 +413,29 @@ int main(int argc, char* argv[]) {
          glfwGetFramebufferSize(window, &fbW, &fbH);
          glViewport(0, 0, fbW, fbH);
  
+         // Capture desktop frame via DXGI -> GPU CopyResource -> shared texture
+         ID3D11Texture2D* newFrame = nullptr;
+         if (scAcquireFrame(screenCap, newFrame) && newFrame) {
+             giUpdate(glInterop, newFrame);
+             newFrame->Release();
+         }
+
          // Update uniforms
          double now = glfwGetTime();
          float t = (float)(now - startTime);
          // iDate.w = seconds since epoch (for pomodoro wall clock)
          float epochSec = (float)time(nullptr);
+
+         // Lock interop: required before sampling the shared texture
+         giLock(glInterop);
  
          gl_UseProgram(program);
+
+         // Bind desktop texture to iChannel0 (texture unit 0)
+         gl_ActiveTexture(GL_TEXTURE0);
+         glBindTexture(GL_TEXTURE_2D, giGetTexture(glInterop));
+         gl_Uniform1i(locChannel0, 0);
+
          gl_Uniform3f(locResolution, (float)fbW, (float)fbH, 0.0f);
          gl_Uniform1f(locTime, t);
          gl_Uniform4f(locDate, 0.0f, 0.0f, 0.0f, epochSec);
@@ -338,6 +444,9 @@ int main(int argc, char* argv[]) {
          gl_DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
          gl_BindVertexArray(0);
          gl_UseProgram(0);
+
+         // Unlock interop after rendering
+         giUnlock(glInterop);
  
          glfwSwapBuffers(window);
  
@@ -352,6 +461,8 @@ int main(int argc, char* argv[]) {
      }
  
      // Cleanup
+     giShutdown(glInterop);
+     scShutdown(screenCap);
      gl_DeleteProgram(program);
      gl_DeleteVertexArrays(1, &vao);
      gl_DeleteBuffers(1, &vbo);
