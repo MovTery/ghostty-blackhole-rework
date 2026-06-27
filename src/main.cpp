@@ -270,12 +270,29 @@ static void MonitorSpawn(const char* selfPath) {
         CloseHandle(g_pi.hThread);
 }
 
+static HWND FindWindowByPID(DWORD pid) {
+    struct Ctx { DWORD pid; HWND hwnd; } ctx = { pid, NULL };
+    EnumWindows([](HWND h, LPARAM lp) -> BOOL {
+        auto* c = (Ctx*)lp;
+        DWORD p; GetWindowThreadProcessId(h, &p);
+        if (p == c->pid) { c->hwnd = h; return FALSE; }
+        return TRUE;
+    }, (LPARAM)&ctx);
+    return ctx.hwnd;
+}
+
 static void MonitorKill() {
-    if (g_pi.hProcess) {
+    if (!g_pi.hProcess) return;
+    HWND hwnd = FindWindowByPID(g_pi.dwProcessId);
+    if (hwnd) {
+        PostMessage(hwnd, WM_CLOSE, 0, 0);
+        if (WaitForSingleObject(g_pi.hProcess, 2000) == WAIT_TIMEOUT)
+            TerminateProcess(g_pi.hProcess, 0);
+    } else {
         TerminateProcess(g_pi.hProcess, 0);
-        CloseHandle(g_pi.hProcess);
-        g_pi.hProcess = NULL;
     }
+    CloseHandle(g_pi.hProcess);
+    g_pi.hProcess = NULL;
 }
 
 static bool MonitorRunning() {
@@ -350,7 +367,9 @@ int main(int argc, char* argv[]) {
 
     GLFWmonitor* mon = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = glfwGetVideoMode(mon);
-    GLFWwindow* window = glfwCreateWindow(mode->width, mode->height, "Black Hole", nullptr, nullptr);
+    char winTitle[64];
+    snprintf(winTitle, sizeof(winTitle), "BH_%u", GetCurrentProcessId());
+    GLFWwindow* window = glfwCreateWindow(mode->width, mode->height, winTitle, nullptr, nullptr);
     glfwSetWindowPos(window, 0, 0);
     if (!window) { glfwTerminate(); return 1; }
 
@@ -376,9 +395,11 @@ int main(int argc, char* argv[]) {
         DwmSetWindowAttribute(hwnd, DWMWA_NCRENDERING_POLICY, &ncrp, sizeof(ncrp));
         SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
         SetWindowSubclass(hwnd, OverlayWndProc, 1, 0);
-        SetWindowPos(hwnd, HWND_TOPMOST, 0,0,0,0, SWP_NOMOVE|SWP_NOSIZE|SWP_SHOWWINDOW);
+        DwmFlush();  // flush DWM attributes before showing
+        SetWindowPos(hwnd, HWND_TOPMOST, 0,0,0,0, SWP_NOMOVE|SWP_NOSIZE);
         ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-        DwmFlush();  // Clear compositor accent layer cache
+        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &bc, sizeof(bc));
+        DwmFlush();  // flush after show to clear any cached accent
     }
 
     glfwMakeContextCurrent(window);
