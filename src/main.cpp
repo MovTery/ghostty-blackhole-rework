@@ -338,19 +338,69 @@ int main(int argc, char* argv[]) {
         char selfPath[MAX_PATH];
         GetModuleFileNameA(NULL, selfPath, MAX_PATH);
         glfwTerminate();
-        fprintf(stderr, "[Monitor] mode=%d idleSec=%d\n", cfg.mode, cfg.idleSec);
-        // mode 0: start renderer immediately and keep alive
-        if (cfg.mode == 0) MonitorSpawn(selfPath);
-        while (true) {
-            bool idle = isIdle((DWORD)cfg.idleSec * 1000);
-            if (cfg.mode == 0) {
-                if (!MonitorRunning()) MonitorSpawn(selfPath);
-            } else {
-                if (idle && !MonitorRunning()) MonitorSpawn(selfPath);
-                if (!idle && MonitorRunning())  MonitorKill();
+
+        // === Tray icon monitor ===
+        #define WM_TRAYICON (WM_USER + 1)
+        #define ID_TRAY_EXIT 1001
+
+        NOTIFYICONDATAA nid = {};
+        nid.cbSize = sizeof(nid);
+        nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+        nid.uCallbackMessage = WM_TRAYICON;
+        nid.hIcon = LoadIconA(NULL, (LPCSTR)IDI_APPLICATION);
+        strcpy(nid.szTip, "Black Hole Monitor");
+
+        // Create hidden message-only window for tray
+        WNDCLASSA wc = {};
+        wc.lpfnWndProc = [](HWND h, UINT m, WPARAM w, LPARAM l) -> LRESULT {
+            if (m == WM_TRAYICON && l == WM_RBUTTONUP) {
+                HMENU menu = CreatePopupMenu();
+                AppendMenuW(menu, MF_STRING, ID_TRAY_EXIT, L"退出");
+                POINT pt; GetCursorPos(&pt);
+                SetForegroundWindow(h);
+                TrackPopupMenu(menu, TPM_RIGHTALIGN|TPM_BOTTOMALIGN, pt.x, pt.y, 0, h, NULL);
+                DestroyMenu(menu);
             }
-            Sleep(5000);
-        }
+            if (m == WM_COMMAND && LOWORD(w) == ID_TRAY_EXIT)
+                PostQuitMessage(0);
+            if (m == WM_TIMER && w == 1) {
+                auto* pSelf = (char*)GetWindowLongPtrA(h, GWLP_USERDATA);
+                auto* pCfg  = (BlackholeConfig*)(pSelf + MAX_PATH);
+                bool idle = isIdle((DWORD)pCfg->idleSec * 1000);
+                if (pCfg->mode == 0) {
+                    if (!MonitorRunning()) MonitorSpawn(pSelf);
+                } else {
+                    if (idle && !MonitorRunning()) MonitorSpawn(pSelf);
+                    if (!idle && MonitorRunning())  MonitorKill();
+                }
+            }
+            return DefWindowProcA(h, m, w, l);
+        };
+        wc.hInstance = GetModuleHandleA(NULL);
+        wc.lpszClassName = "BHMon";
+        RegisterClassA(&wc);
+        HWND monHwnd = CreateWindowA("BHMon", "", 0,0,0,0,0, NULL, NULL, wc.hInstance, NULL);
+
+        // Store selfPath + cfg in window userdata for timer callback
+        char userBuf[MAX_PATH + sizeof(BlackholeConfig)];
+        memcpy(userBuf, selfPath, MAX_PATH);
+        memcpy(userBuf + MAX_PATH, &cfg, sizeof(cfg));
+        SetWindowLongPtrA(monHwnd, GWLP_USERDATA, (LONG_PTR)userBuf);
+
+        nid.hWnd = monHwnd;
+        Shell_NotifyIconA(NIM_ADD, &nid);
+
+        // Start renderer immediately in mode 0
+        if (cfg.mode == 0) MonitorSpawn(selfPath);
+
+        SetTimer(monHwnd, 1, 5000, NULL);
+        fprintf(stderr, "[Monitor] mode=%d idleSec=%d (tray icon ready)\n", cfg.mode, cfg.idleSec);
+
+        MSG msg;
+        while (GetMessageA(&msg, NULL, 0, 0)) { TranslateMessage(&msg); DispatchMessageA(&msg); }
+
+        KillTimer(monHwnd, 1);
+        Shell_NotifyIconA(NIM_DELETE, &nid);
         MonitorKill();
         return 0;
     }
