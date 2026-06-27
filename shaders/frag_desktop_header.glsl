@@ -22,7 +22,7 @@ uniform float uDiskIncl   = -1.0;
 
 // Demo preset overrides (negative = use hardcoded default)
 #define MAX_PRESETS 16
-uniform int   uPresetCount = 8;
+uniform int   uPresetCount = 0;
 uniform float uPresetTemp [MAX_PRESETS];
 uniform float uPresetIncl [MAX_PRESETS];
 uniform float uPresetRoll [MAX_PRESETS];
@@ -38,5 +38,4 @@ uniform float uPresetSpd  [MAX_PRESETS];
 uniform float uPresetExpo [MAX_PRESETS];
 uniform float uPresetStar [MAX_PRESETS];
 
-uniform bool uUseCustom = false;
 #define fragColor gl_FragColor

@@ -190,7 +190,7 @@ static bool buildFragmentShader(std::string& out) {
                     "}\n"
                     "\n"
                     "DiskLook demoLook() {\n"
-                    "    if (uUseCustom) {\n"
+                    "    if (uPresetCount > 0) {\n"
                     "        int n = int(clamp(float(uPresetCount), 1.0, float(MAX_PRESETS)));\n"
                     "        float u = mod(iTime, DEMO_SEC) / DEMO_SEC * float(n);\n"
                     "        int   i = int(min(u, float(n) - 0.001));\n"
@@ -323,7 +323,6 @@ int main(int argc, char* argv[]) {
     GLint loc_uEX  = gl_GetUniformLocation(program, "uExposure");
     GLint loc_uSP  = gl_GetUniformLocation(program, "uSpeed");
     GLint loc_uSG  = gl_GetUniformLocation(program, "uStarGain");
-    GLint loc_uCust = gl_GetUniformLocation(program, "uUseCustom");
     GLint loc_uDI  = gl_GetUniformLocation(program, "uDiskIncl");
     // Preset uniform locations
     GLint loc_uPC   = gl_GetUniformLocation(program, "uPresetCount");
@@ -410,10 +409,9 @@ int main(int argc, char* argv[]) {
         gl_Uniform1f(loc_uEX, cfg.exposure);
         gl_Uniform1f(loc_uSP, cfg.spd);
         gl_Uniform1f(loc_uSG, cfg.starGain);
-        gl_Uniform1i(loc_uCust, cfg.useCustomPresets ? 1 : 0);
         gl_Uniform1f(loc_uDI, cfg.diskIncl);
         // Upload preset uniforms
-        gl_Uniform1i(loc_uPC, cfg.presetCount);
+        gl_Uniform1i(loc_uPC, cfg.useCustomPresets ? cfg.presetCount : 0);
         {
             float buf[16];
             for (int i = 0; i < cfg.presetCount; i++) buf[i] = cfg.presets[i].temp;
