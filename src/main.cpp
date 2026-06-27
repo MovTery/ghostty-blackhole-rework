@@ -34,7 +34,6 @@
 #include <endpointvolume.h>
 #include <tlhelp32.h>
 // === DEBUG LOGGING ===
-#define DBG(fmt, ...) do { FILE* _f = fopen("blackhole_debug.log", "a"); if(_f) { fprintf(_f, fmt, ##__VA_ARGS__); fclose(_f); } } while(0)
 
 #ifndef GL_COMPILE_STATUS
 #include <GL/glcorearb.h>
@@ -127,7 +126,7 @@ static GLuint compileShader(GLenum type, const std::string& source) {
     gl_CompileShader(shader);
     GLint ok = 0; gl_GetShaderiv(shader, GL_COMPILE_STATUS, &ok);
     char log[4096]; gl_GetShaderInfoLog(shader, sizeof(log), nullptr, log);
-    if (log[0]) DBG("[%s] %s\n", type==GL_VERTEX_SHADER?"vert":"frag", log);
+    if (log[0]) fprintf(stderr, "[%s] %s\n", type==GL_VERTEX_SHADER?"vert":"frag", log);
     if (!ok) { gl_DeleteShader(shader); return 0; }
     return shader;
 }
@@ -294,11 +293,6 @@ static bool isWatchingVideo() {
     HWND fg = GetForegroundWindow();
     if (!fg) return false;
 
-    // === DEBUG ===
-    { DWORD _pid = 0; GetWindowThreadProcessId(fg, &_pid);
-      char _nm[260]; GetProcessName(_pid, _nm, sizeof(_nm));
-      DBG("[DBG] fg PID=%lu Name='%s'\n", _pid, _nm); }
-
     // Method 1: D3D fullscreen / presentation mode
     typedef enum { QUNS_NOT_PRESENT=1, QUNS_BUSY=2, QUNS_RUNNING_D3D_FULL_SCREEN=3,
                    QUNS_PRESENTATION_MODE=4 } QUNS;
@@ -331,34 +325,28 @@ static bool isWatchingVideo() {
                     strstr(pname, "nvidia") ||
                     strstr(pname, "chrome") || strstr(pname, "msedge") || strstr(pname, "firefox") ||
                     strstr(pname, "opera") || strstr(pname, "brave"));
-    DBG("[DBG] isVideo=%d\n", (int)isVideo);
     bool uwpDetected = false;
     // UWP apps run under ApplicationFrameHost.exe  check window title for media players
     if (!isVideo && strstr(pname, "applicationframehost")) {
         WCHAR wtitle[256] = {};
         GetWindowTextW(fg, wtitle, 256);
-        char wtitleUtf8[512] = {};
-        WideCharToMultiByte(CP_UTF8, 0, wtitle, -1, wtitleUtf8, sizeof(wtitleUtf8), NULL, NULL);
-        DBG("[DBG] UWP window title='%s'\n", wtitleUtf8);
         if (wtitle[0]) {
             if (wcsstr(wtitle, L"电影") || wcsstr(wtitle, L"电视") || wcsstr(wtitle, L"媒体") ||
                 wcsstr(wtitle, L"播放") || wcsstr(wtitle, L"视频") || wcsstr(wtitle, L"Movies") ||
                 wcsstr(wtitle, L"Media") || wcsstr(wtitle, L"Player") || wcsstr(wtitle, L"Video") ||
                 wcsstr(wtitle, L"TV") || wcsstr(wtitle, L"影视") || wcsstr(wtitle, L"Films")) {
                 isVideo = true; uwpDetected = true;
-                DBG("[DBG] UWP media app detected via title\n");
             }
         }
     }
-    if (!isVideo) { DBG("[DBG] NOT video app -> false\n"); return false; }
+    if (!isVideo) return false;
 
     // Method 2: window covers entire screen
     RECT r;
     if (GetWindowRect(fg, &r)) {
         int sw = GetSystemMetrics(SM_CXSCREEN), sh = GetSystemMetrics(SM_CYSCREEN);
         int ww = r.right - r.left, wh = r.bottom - r.top;
-        DBG("[DBG] M2: win=%dx%d scr=%dx%d\n", ww, wh, sw, sh);
-        if (ww >= sw && wh >= sh) { DBG("[DBG] M2 fullscreen -> true\n"); return true; }
+        if (ww >= sw && wh >= sh) return true;
     }
 
     // Method 3: check if this app has audio
@@ -397,7 +385,6 @@ static bool isWatchingVideo() {
                 if (uwpDetected) {
                     match = true;  // match all sessions for UWP media apps
                     char spname[260]; GetProcessName(spid, spname, sizeof(spname));
-                    DBG("[DBG] M3 UWP: PID=%lu Name='%s'\n", spid, spname);
                 } else {
                     char spname[260]; GetProcessName(spid, spname, sizeof(spname));
                     match = spname[0] && (strcmp(spname, pname) == 0);
@@ -406,7 +393,6 @@ static bool isWatchingVideo() {
                     IAudioMeterInformation2* meter = nullptr;
                     if (SUCCEEDED(sc2->QueryInterface(IID_IAudioMeterInformation2, (void**)&meter))) {
                         float peak = 0; meter->GetPeakValue(&peak);
-                        DBG("[DBG] M3: PID=%lu peak=%.4f match=%d\n", spid, peak, match?1:0);
                         if (peak > 0.0f) hasAudio = true; // any audio > 0
                         meter->Release();
                     }
@@ -417,7 +403,6 @@ static bool isWatchingVideo() {
         sc->Release();
     }
     se->Release(); mgr->Release();
-    DBG("[DBG] M3 result: hasAudio=%d -> returning %s\n", (int)hasAudio, hasAudio ? "true" : "false");
     return hasAudio;
 }
 

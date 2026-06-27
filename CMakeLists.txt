@@ -44,7 +44,8 @@ target_link_libraries(blackhole PRIVATE
 
 # Compile with MSYS2 GCC (ucrt64)
 if(MINGW)
-    target_compile_options(blackhole PRIVATE -mwindows -fexec-charset=UTF-8)
+    target_compile_options(blackhole PRIVATE -fexec-charset=UTF-8)
+    target_link_options(blackhole PRIVATE -mwindows)
     # Fix windres popen bug on Windows
     set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} --use-temp-file")
 endif()

@@ -7,7 +7,7 @@ CXX_DEFINES = -DGLFW_DLL
 
 CXX_INCLUDES = 
 
-CXX_FLAGS = -std=gnu++17 -mwindows -fexec-charset=UTF-8
+CXX_FLAGS = -std=gnu++17 -fexec-charset=UTF-8
 
 RC_DEFINES = -DGLFW_DLL
 
