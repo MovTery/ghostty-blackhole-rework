@@ -1,4 +1,4 @@
-// blackhole standalone  Windows OpenGL host for blackhole.glsl
+﻿// blackhole standalone  Windows OpenGL host for blackhole.glsl
 // v5: ImGui config panel + uniform-overridable shader params
 // Build: Ctrl+Shift+B in VS Code
 
@@ -264,123 +264,129 @@ struct IAudioMeterInformation2 : IUnknown {
     virtual HRESULT STDMETHODCALLTYPE QueryHardwareSupport(DWORD*) = 0;
 };
 
-// Check if process name indicates a video-capable app
-static bool isVideoProcess(const char* name) {
-    if (!name || !name[0]) return false;
-    // Exclusions: wallpaper / audio-only / system processes
-    if (strstr(name, "wallpaper") || strstr(name, "lively") ||
-        strstr(name, "rainmeter") || strstr(name, "spotify") ||
-        strstr(name, "music") || strstr(name, "netease") ||
-        strstr(name, "qqmusic") || strstr(name, "kugou") ||
-        strstr(name, "foobar") || strstr(name, "aimp") ||
-        strstr(name, "audacity") || strstr(name, "obs") ||
-        strstr(name, "discord") || strstr(name, "teams") ||
-        strstr(name, "zoom") || strstr(name, "wechat") ||
-        strstr(name, "explorer"))
-        return false;
-    // Dedicated video players
-    if (strstr(name, "vlc") || strstr(name, "mpv") || strstr(name, "potplayer") ||
-        strstr(name, "mpc-hc") || strstr(name, "mpc-be") || strstr(name, "wmplayer") ||
-        strstr(name, "bilibili") || strstr(name, "iqiYi") || strstr(name, "youku") ||
-        strstr(name, "qqlive") || strstr(name, "mgv") || strstr(name, "kmp") ||
-        strstr(name, "gom") || strstr(name, "splayer") || strstr(name, "baofeng"))
-        return true;
-    // Browsers (commonly used for video)
-    if (strstr(name, "chrome") || strstr(name, "msedge") || strstr(name, "firefox") ||
-        strstr(name, "opera") || strstr(name, "brave") || strstr(name, "iexplore"))
-        return true;
-    return false;
-}
-
 // Get process name from PID
 static void GetProcessName(DWORD pid, char* out, int maxLen) {
     out[0] = 0;
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snap == INVALID_HANDLE_VALUE) return;
-    PROCESSENTRY32 pe = { sizeof(pe) };
-    if (Process32First(snap, &pe)) {
+    PROCESSENTRY32W peW = { sizeof(peW) };
+    if (Process32FirstW(snap, &peW)) {
         do {
-            if (pe.th32ProcessID == pid) {
-                // Convert to lowercase for comparison
-                for (int i = 0; pe.szExeFile[i] && i < maxLen-1; i++)
-                    out[i] = (char)tolower((unsigned char)pe.szExeFile[i]);
-                out[maxLen-1] = 0;
+            if (peW.th32ProcessID == pid) {
+                int len = WideCharToMultiByte(CP_UTF8, 0, peW.szExeFile, -1, out, maxLen, NULL, NULL);
+                if (len == 0) { out[0] = 0; break; }
+                for (int i = 0; out[i] && i < maxLen - 1; i++) {
+                    unsigned char c = (unsigned char)out[i];
+                    if (c < 0x80) out[i] = (char)tolower(c);
+                }
+                out[maxLen - 1] = 0;
                 break;
             }
-        } while (Process32Next(snap, &pe));
+        } while (Process32NextW(snap, &peW));
     }
     CloseHandle(snap);
 }
 
-// Check if any video-related app is playing audio
-static bool isAudioPlaying() {
-    static bool comInit = false;
-    if (!comInit) { CoInitializeEx(NULL, COINIT_MULTITHREADED); comInit = true; }
-    IMMDeviceEnumerator* en = nullptr;
-    if (FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), NULL, CLSCTX_ALL,
-                                 __uuidof(IMMDeviceEnumerator), (void**)&en))) return false;
-    IMMDevice* dev = nullptr;
-    if (FAILED(en->GetDefaultAudioEndpoint(eRender, eConsole, &dev))) { en->Release(); return false; }
-    IAudioSessionManager2* mgr = nullptr;
-    if (FAILED(dev->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, NULL, (void**)&mgr))) {
-        dev->Release(); en->Release(); return false;
-    }
-    IAudioSessionEnumerator* se = nullptr;
-    if (FAILED(mgr->GetSessionEnumerator(&se))) { mgr->Release(); dev->Release(); en->Release(); return false; }
-    int count = 0; se->GetCount(&count);
-    bool playing = false;
-    for (int i = 0; i < count; i++) {
-        IAudioSessionControl* sc = nullptr;
-        if (FAILED(se->GetSession(i, &sc))) continue;
-        IAudioSessionControl2* sc2 = nullptr;
-        if (SUCCEEDED(sc->QueryInterface(__uuidof(IAudioSessionControl2), (void**)&sc2))) {
-            DWORD pid; sc2->GetProcessId(&pid);
-            if (pid != GetCurrentProcessId()) {
-                IAudioMeterInformation2* meter = nullptr;
-                if (SUCCEEDED(sc2->QueryInterface(IID_IAudioMeterInformation2, (void**)&meter))) {
-                    float peak = 0; meter->GetPeakValue(&peak);
-                    if (peak > 0.01f) playing = true;
-                    meter->Release();
-                }
-            }
-            sc2->Release();
-        }
-        sc->Release();
-        if (playing) break;
-    }
-    se->Release(); mgr->Release(); dev->Release(); en->Release();
-    return playing;
-}
-
-// Check if user is watching video / fullscreen content
+// Check if current foreground window is a video app playing audio
 static bool isWatchingVideo() {
-    // Method 1: D3D fullscreen / presentation mode (games, some video players)
+    HWND fg = GetForegroundWindow();
+    if (!fg) return false;
+
+    // Method 1: D3D fullscreen / presentation mode
     typedef enum { QUNS_NOT_PRESENT=1, QUNS_BUSY=2, QUNS_RUNNING_D3D_FULL_SCREEN=3,
                    QUNS_PRESENTATION_MODE=4 } QUNS;
     typedef HRESULT (WINAPI *PFN_QUNS)(QUNS*);
     static PFN_QUNS pfnQuns = nullptr;
-    if (!pfnQuns) {
-        pfnQuns = (PFN_QUNS)GetProcAddress(GetModuleHandleA("shell32.dll"), "SHQueryUserNotificationState");
-    }
+    if (!pfnQuns) pfnQuns = (PFN_QUNS)GetProcAddress(GetModuleHandleA("shell32.dll"), "SHQueryUserNotificationState");
     if (pfnQuns) {
         QUNS state;
         if (SUCCEEDED(pfnQuns(&state)) && (state == QUNS_RUNNING_D3D_FULL_SCREEN || state == QUNS_PRESENTATION_MODE))
             return true;
     }
-    // Method 2: foreground window covers entire screen (browser fullscreen, media players)
-    HWND fg = GetForegroundWindow();
-    if (fg) {
-        RECT r;
-        if (GetWindowRect(fg, &r)) {
-            int sw = GetSystemMetrics(SM_CXSCREEN);
-            int sh = GetSystemMetrics(SM_CYSCREEN);
-            if ((r.right - r.left) >= sw && (r.bottom - r.top) >= sh)
-                return true;
-        }
+
+    // Get foreground process name
+    DWORD pid = 0;
+    GetWindowThreadProcessId(fg, &pid);
+    if (!pid) return false;
+    char pname[260]; GetProcessName(pid, pname, sizeof(pname));
+    if (!pname[0]) return false;
+
+    // Check if process is a known video player or browser
+    bool isVideo = (strstr(pname, "vlc") || strstr(pname, "mpv") || strstr(pname, "potplayer") ||
+                    strstr(pname, "mpc") || strstr(pname, "wmplayer") || strstr(pname, "bilibili") ||
+                    strstr(pname, "哔哩哔哩") || strstr(pname, "bili") ||
+                    strstr(pname, "iqiyi") || strstr(pname, "爱奇艺") ||
+                    strstr(pname, "youku") || strstr(pname, "优酷") ||
+                    strstr(pname, "mgtv") || strstr(pname, "芒果") ||
+                    strstr(pname, "douyin") || strstr(pname, "抖音") ||
+                    strstr(pname, "kuaishou") || strstr(pname, "快手") ||
+                    strstr(pname, "腾讯视频") || strstr(pname, "qqlive") ||
+                    strstr(pname, "chrome") || strstr(pname, "msedge") || strstr(pname, "firefox") ||
+                    strstr(pname, "opera") || strstr(pname, "brave"));
+    if (!isVideo) return false;
+
+    // Method 2: window covers entire screen
+    RECT r;
+    if (GetWindowRect(fg, &r)) {
+        int sw = GetSystemMetrics(SM_CXSCREEN), sh = GetSystemMetrics(SM_CYSCREEN);
+        if ((r.right - r.left) >= sw && (r.bottom - r.top) >= sh) return true;
     }
-    // Method 3: audio is playing (windowed video / background playback)
-    if (isAudioPlaying()) return true;
-    return false;
+
+    // Method 3: check if this app has audio
+    bool isBrowser = (strstr(pname, "chrome") || strstr(pname, "msedge") ||
+                      strstr(pname, "firefox") || strstr(pname, "opera") || strstr(pname, "brave"));
+
+    CoInitializeEx(NULL, COINIT_MULTITHREADED); // safe to call multiple times
+    IMMDeviceEnumerator* en = nullptr;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), NULL, CLSCTX_ALL,
+                                   __uuidof(IMMDeviceEnumerator), (void**)&en);
+    if (FAILED(hr)) return false;
+
+    IMMDevice* dev = nullptr;
+    hr = en->GetDefaultAudioEndpoint(eRender, eConsole, &dev);
+    en->Release();
+    if (FAILED(hr)) return false;
+
+    IAudioSessionManager2* mgr = nullptr;
+    hr = dev->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, NULL, (void**)&mgr);
+    dev->Release();
+    if (FAILED(hr)) return false;
+
+    IAudioSessionEnumerator* se = nullptr;
+    hr = mgr->GetSessionEnumerator(&se);
+    if (FAILED(hr)) { mgr->Release(); return false; }
+
+    int count = 0; se->GetCount(&count);
+    bool hasAudio = false;
+    for (int i = 0; i < count && !hasAudio; i++) {
+        IAudioSessionControl* sc = nullptr;
+        if (FAILED(se->GetSession(i, &sc))) continue;
+        IAudioSessionControl2* sc2 = nullptr;
+        if (SUCCEEDED(sc->QueryInterface(__uuidof(IAudioSessionControl2), (void**)&sc2))) {
+            DWORD spid; sc2->GetProcessId(&spid);
+            if (spid != GetCurrentProcessId()) {
+                bool match;
+                if (isBrowser) {
+                    char spname[260]; GetProcessName(spid, spname, sizeof(spname));
+                    match = spname[0] && (strcmp(spname, pname) == 0);
+                } else {
+                    match = (spid == pid);
+                }
+                if (match) {
+                    IAudioMeterInformation2* meter = nullptr;
+                    if (SUCCEEDED(sc2->QueryInterface(IID_IAudioMeterInformation2, (void**)&meter))) {
+                        float peak = 0; meter->GetPeakValue(&peak);
+                        if (peak > 0.0f) hasAudio = true; // any audio > 0
+                        meter->Release();
+                    }
+                }
+            }
+            sc2->Release();
+        }
+        sc->Release();
+    }
+    se->Release(); mgr->Release();
+    return hasAudio;
 }
 
 static bool isIdle(DWORD ms) {

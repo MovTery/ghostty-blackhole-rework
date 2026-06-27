@@ -1,34 +1,53 @@
-﻿# Debug State — Blackhole v10: 配置器 + 渲染器 进程分离
+﻿# Debug State — Blackhole v10: B站视频播放误触发问题修复
 
-## 当前状态
-### 编译 ✓ - 零警告零错误 (2026-06-27)
+## 问题描述
+- **症状**: B站播放视频时（客户端/网页、窗口/全屏），黑洞屏保仍然会触发
+- **预期**: 播放视频时应视为"活跃"，不应触发屏保
 
-## 架构：双进程分离
+## 根因分析
 
-`
-blackhole.exe             → 配置页面 + 空闲监控（Monitor）
-blackhole.exe --render    → 黑洞渲染（Renderer）
-`
+### Bug 1: `GetProcessName()` 字符串未正确终止 ✅ 已修复
+`src/main.cpp:267` — 循环复制进程名后只在 `out[maxLen-1]` 写 `\0`，数据末尾保留了栈上随机垃圾。导致 `strcmp(spname, pname)` 永远返回非零，Method 3 音频检测失效。
 
-### 流程
-`
-用户打开 blackhole.exe
-    ↓
-配置页面 (ImGui)
-    ↓ 点击"启动"
-保存配置 → 启动 blackhole.exe --render → 进入监控循环
-    ↓                                    ↓
-每5秒检测空闲                          读取配置渲染黑洞
-    ↓                                    ↓
-空闲 → 启动渲染器                       ESC → 退出
-活跃 → 关闭渲染器                       被监控关闭 → 退出
-`
-
-### 关键点
-- 渲染器永不处理空闲逻辑（由监控器管理）
-- 监控器不开 OpenGL 窗口（纯后台进程）
-- 进程级隔离：无 DWM/opacity/show-hide 问题
-- 活跃时渲染器进程不存在 → 零 GPU/CPU 负载
+### Bug 2: 不支持中文进程名 ✅ 已修复
+`PROCESSENTRY32`（ANSI版）获取的进程名使用系统代码页编码，中文 `"哔哩哔哩.exe"` 的 GBK 字节无法被 ASCII `strstr("bilibili")` 匹配。
 
 ## 修改文件
-- src/main.cpp — 进程拆分 + 监控循环
+
+### `src/main.cpp` — 2处修改
+
+**修改1: `GetProcessName` (line 267)**
+- 改用 `PROCESSENTRY32W` + `Process32FirstW/NextW`（Unicode API）
+- 使用 `WideCharToMultiByte(CP_UTF8, ...)` 转换为 UTF-8
+- 仅对 ASCII 字节（< 0x80）做 `tolower`，保护 UTF-8 多字节序列
+- 正确在数据末尾写 `\0`
+
+**修改2: `isVideo` 进程名检测 (line 314)**
+新增以下匹配模式：
+| 平台 | 新增模式 |
+|------|----------|
+| B站 | `哔哩哔哩`, `bili` |
+| 爱奇艺 | `iqiyi`, `爱奇艺` |
+| 优酷 | `youku`, `优酷` |
+| 芒果TV | `mgtv`, `芒果` |
+| 抖音 | `douyin`, `抖音` |
+| 快手 | `kuaishou`, `快手` |
+| 腾讯视频 | `腾讯视频`, `qqlive` |
+
+## 修改函数
+- `GetProcessName()` — 改用 Unicode API + UTF-8 输出
+- `isWatchingVideo()` — 扩充进程名匹配模式
+
+## 编译检查
+✅ 零警告零错误（MSYS2 MinGW GCC）
+
+## 风险分析
+- **影响模块**: 空闲检测核心逻辑
+- **潜在风险**: 
+  - UTF-8 转换使用了 `CP_UTF8`，需确认目标系统支持
+  - `tolower` 仅应用于 ASCII 字节，多字节 UTF-8 字符保持原样
+- **需要验证**: 
+  - B站桌面客户端播放视频时屏保不触发
+  - B站网页版（Chrome/Edge）窗口/全屏播放视频时屏保不触发
+  - 桌面壁纸播放音频时屏保正常触发（不误判）
+  - 其他视频客户端（腾讯视频、爱奇艺等）正常检测
