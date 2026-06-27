@@ -29,6 +29,10 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 #include <GL/gl.h>
+#include <mmdeviceapi.h>
+#include <audiopolicy.h>
+#include <endpointvolume.h>
+#include <tlhelp32.h>
 
 #ifndef GL_COMPILE_STATUS
 #include <GL/glcorearb.h>
@@ -251,22 +255,120 @@ static LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
     return DefSubclassProc(hwnd, msg, wp, lp);
 }
 
-// Check if user is watching video (fullscreen D3D app / presentation mode)
-static bool isWatchingVideo() {
-    // QUNS_RUNNING_D3D_FULL_SCREEN = 3, QUNS_PRESENTATION_MODE = 4
-    typedef enum { QUNS_NOT_PRESENT=1, QUNS_BUSY=2, QUNS_RUNNING_D3D_FULL_SCREEN=3,
-                   QUNS_PRESENTATION_MODE=4, QUNS_ACCEPTS_NOTIFICATIONS=5 } QUNS;
-    typedef HRESULT (WINAPI *PFN_SHQueryUserNotificationState)(QUNS*);
-    static PFN_SHQueryUserNotificationState pfn = nullptr;
-    if (!pfn) {
-        HMODULE shell = GetModuleHandleA("shell32.dll");
-        pfn = (PFN_SHQueryUserNotificationState)GetProcAddress(shell, "SHQueryUserNotificationState");
+// IAudioMeterInformation GUID (missing from MinGW headers)
+static const GUID IID_IAudioMeterInformation2 = {0xC02216F6,0x8C67,0x4B5B,{0x9D,0x00,0xD0,0x08,0xE7,0x3E,0x00,0x64}};
+struct IAudioMeterInformation2 : IUnknown {
+    virtual HRESULT STDMETHODCALLTYPE GetPeakValue(float*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetMeteringChannelCount(UINT*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetChannelsPeakValues(UINT, float*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE QueryHardwareSupport(DWORD*) = 0;
+};
+
+// Check if process name indicates a video-capable app
+static bool isVideoProcess(const char* name) {
+    if (!name || !name[0]) return false;
+    // Dedicated video players
+    if (strstr(name, "vlc") || strstr(name, "mpv") || strstr(name, "potplayer") ||
+        strstr(name, "mpc-hc") || strstr(name, "mpc-be") || strstr(name, "wmplayer") ||
+        strstr(name, "bilibili") || strstr(name, "iqiYi") || strstr(name, "youku") ||
+        strstr(name, "qqlive") || strstr(name, "mgv") || strstr(name, "kmp") ||
+        strstr(name, "gom") || strstr(name, "splayer") || strstr(name, "baofeng"))
+        return true;
+    // Browsers (commonly used for video)
+    if (strstr(name, "chrome") || strstr(name, "msedge") || strstr(name, "firefox") ||
+        strstr(name, "opera") || strstr(name, "brave") || strstr(name, "iexplore"))
+        return true;
+    return false;
+}
+
+// Get process name from PID
+static void GetProcessName(DWORD pid, char* out, int maxLen) {
+    out[0] = 0;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return;
+    PROCESSENTRY32 pe = { sizeof(pe) };
+    if (Process32First(snap, &pe)) {
+        do {
+            if (pe.th32ProcessID == pid) {
+                // Convert to lowercase for comparison
+                for (int i = 0; pe.szExeFile[i] && i < maxLen-1; i++)
+                    out[i] = (char)tolower((unsigned char)pe.szExeFile[i]);
+                out[maxLen-1] = 0;
+                break;
+            }
+        } while (Process32Next(snap, &pe));
     }
-    if (pfn) {
+    CloseHandle(snap);
+}
+
+// Check if any video-related app is playing audio
+static bool isAudioPlaying() {
+    static bool comInit = false;
+    if (!comInit) { CoInitializeEx(NULL, COINIT_MULTITHREADED); comInit = true; }
+    IMMDeviceEnumerator* en = nullptr;
+    if (FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), NULL, CLSCTX_ALL,
+                                 __uuidof(IMMDeviceEnumerator), (void**)&en))) return false;
+    IMMDevice* dev = nullptr;
+    if (FAILED(en->GetDefaultAudioEndpoint(eRender, eConsole, &dev))) { en->Release(); return false; }
+    IAudioSessionManager2* mgr = nullptr;
+    if (FAILED(dev->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, NULL, (void**)&mgr))) {
+        dev->Release(); en->Release(); return false;
+    }
+    IAudioSessionEnumerator* se = nullptr;
+    if (FAILED(mgr->GetSessionEnumerator(&se))) { mgr->Release(); dev->Release(); en->Release(); return false; }
+    int count = 0; se->GetCount(&count);
+    bool playing = false;
+    for (int i = 0; i < count; i++) {
+        IAudioSessionControl* sc = nullptr;
+        if (FAILED(se->GetSession(i, &sc))) continue;
+        IAudioSessionControl2* sc2 = nullptr;
+        if (SUCCEEDED(sc->QueryInterface(__uuidof(IAudioSessionControl2), (void**)&sc2))) {
+            DWORD pid; sc2->GetProcessId(&pid);
+            if (pid != GetCurrentProcessId()) {
+                IAudioMeterInformation2* meter = nullptr;
+                if (SUCCEEDED(sc2->QueryInterface(IID_IAudioMeterInformation2, (void**)&meter))) {
+                    float peak = 0; meter->GetPeakValue(&peak);
+                    if (peak > 0.01f) playing = true;
+                    meter->Release();
+                }
+            }
+            sc2->Release();
+        }
+        sc->Release();
+        if (playing) break;
+    }
+    se->Release(); mgr->Release(); dev->Release(); en->Release();
+    return playing;
+}
+
+// Check if user is watching video / fullscreen content
+static bool isWatchingVideo() {
+    // Method 1: D3D fullscreen / presentation mode (games, some video players)
+    typedef enum { QUNS_NOT_PRESENT=1, QUNS_BUSY=2, QUNS_RUNNING_D3D_FULL_SCREEN=3,
+                   QUNS_PRESENTATION_MODE=4 } QUNS;
+    typedef HRESULT (WINAPI *PFN_QUNS)(QUNS*);
+    static PFN_QUNS pfnQuns = nullptr;
+    if (!pfnQuns) {
+        pfnQuns = (PFN_QUNS)GetProcAddress(GetModuleHandleA("shell32.dll"), "SHQueryUserNotificationState");
+    }
+    if (pfnQuns) {
         QUNS state;
-        if (SUCCEEDED(pfn(&state)) && (state == QUNS_RUNNING_D3D_FULL_SCREEN || state == QUNS_PRESENTATION_MODE))
+        if (SUCCEEDED(pfnQuns(&state)) && (state == QUNS_RUNNING_D3D_FULL_SCREEN || state == QUNS_PRESENTATION_MODE))
             return true;
     }
+    // Method 2: foreground window covers entire screen (browser fullscreen, media players)
+    HWND fg = GetForegroundWindow();
+    if (fg) {
+        RECT r;
+        if (GetWindowRect(fg, &r)) {
+            int sw = GetSystemMetrics(SM_CXSCREEN);
+            int sh = GetSystemMetrics(SM_CYSCREEN);
+            if ((r.right - r.left) >= sw && (r.bottom - r.top) >= sh)
+                return true;
+        }
+    }
+    // Method 3: audio is playing (windowed video / background playback)
+    if (isAudioPlaying()) return true;
     return false;
 }
 

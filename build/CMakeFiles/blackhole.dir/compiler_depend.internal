@@ -2468,6 +2468,9 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj
  C:/msys64/ucrt64/include/_timeval.h
  C:/msys64/ucrt64/include/apiset.h
  C:/msys64/ucrt64/include/apisetcconv.h
+ C:/msys64/ucrt64/include/audioclient.h
+ C:/msys64/ucrt64/include/audiopolicy.h
+ C:/msys64/ucrt64/include/audiosessiontypes.h
  C:/msys64/ucrt64/include/basetsd.h
  C:/msys64/ucrt64/include/bcrypt.h
  C:/msys64/ucrt64/include/bemapiset.h
@@ -2632,6 +2635,7 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj
  C:/msys64/ucrt64/include/dde.h
  C:/msys64/ucrt64/include/ddeml.h
  C:/msys64/ucrt64/include/debugapi.h
+ C:/msys64/ucrt64/include/devicetopology.h
  C:/msys64/ucrt64/include/dlgs.h
  C:/msys64/ucrt64/include/dpapi.h
  C:/msys64/ucrt64/include/driverspecs.h
@@ -2641,6 +2645,7 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj
  C:/msys64/ucrt64/include/dxgicommon.h
  C:/msys64/ucrt64/include/dxgiformat.h
  C:/msys64/ucrt64/include/dxgitype.h
+ C:/msys64/ucrt64/include/endpointvolume.h
  C:/msys64/ucrt64/include/errhandlingapi.h
  C:/msys64/ucrt64/include/errno.h
  C:/msys64/ucrt64/include/excpt.h
@@ -2656,6 +2661,8 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj
  C:/msys64/ucrt64/include/ioapiset.h
  C:/msys64/ucrt64/include/jobapi.h
  C:/msys64/ucrt64/include/joystickapi.h
+ C:/msys64/ucrt64/include/ks.h
+ C:/msys64/ucrt64/include/ksmedia.h
  C:/msys64/ucrt64/include/ktmtypes.h
  C:/msys64/ucrt64/include/libloaderapi.h
  C:/msys64/ucrt64/include/limits.h
@@ -2668,9 +2675,11 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj
  C:/msys64/ucrt64/include/memoryapi.h
  C:/msys64/ucrt64/include/minwinbase.h
  C:/msys64/ucrt64/include/minwindef.h
+ C:/msys64/ucrt64/include/mmdeviceapi.h
  C:/msys64/ucrt64/include/mmeapi.h
  C:/msys64/ucrt64/include/mmiscapi.h
  C:/msys64/ucrt64/include/mmiscapi2.h
+ C:/msys64/ucrt64/include/mmreg.h
  C:/msys64/ucrt64/include/mmsyscom.h
  C:/msys64/ucrt64/include/mmsystem.h
  C:/msys64/ucrt64/include/msxml.h
@@ -2694,6 +2703,8 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj
  C:/msys64/ucrt64/include/processtopologyapi.h
  C:/msys64/ucrt64/include/profileapi.h
  C:/msys64/ucrt64/include/propidl.h
+ C:/msys64/ucrt64/include/propkeydef.h
+ C:/msys64/ucrt64/include/propsys.h
  C:/msys64/ucrt64/include/prsht.h
  C:/msys64/ucrt64/include/psdk_inc/_fd_types.h
  C:/msys64/ucrt64/include/psdk_inc/_ip_mreq1.h
@@ -2737,6 +2748,7 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj
  C:/msys64/ucrt64/include/securitybaseapi.h
  C:/msys64/ucrt64/include/servprov.h
  C:/msys64/ucrt64/include/shellapi.h
+ C:/msys64/ucrt64/include/shtypes.h
  C:/msys64/ucrt64/include/signal.h
  C:/msys64/ucrt64/include/specstrings.h
  C:/msys64/ucrt64/include/stdarg.h
@@ -2747,6 +2759,7 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj
  C:/msys64/ucrt64/include/stralign.h
  C:/msys64/ucrt64/include/string.h
  C:/msys64/ucrt64/include/stringapiset.h
+ C:/msys64/ucrt64/include/structuredquerycondition.h
  C:/msys64/ucrt64/include/swprintf.inl
  C:/msys64/ucrt64/include/synchapi.h
  C:/msys64/ucrt64/include/sys/timeb.h
@@ -2758,6 +2771,7 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj
  C:/msys64/ucrt64/include/time.h
  C:/msys64/ucrt64/include/timeapi.h
  C:/msys64/ucrt64/include/timezoneapi.h
+ C:/msys64/ucrt64/include/tlhelp32.h
  C:/msys64/ucrt64/include/tvout.h
  C:/msys64/ucrt64/include/unknwn.h
  C:/msys64/ucrt64/include/unknwnbase.h

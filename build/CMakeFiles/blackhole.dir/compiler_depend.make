@@ -2457,6 +2457,9 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj: C:/Test_Program/VS_Code/ghostty-black
   C:/msys64/ucrt64/include/_timeval.h \
   C:/msys64/ucrt64/include/apiset.h \
   C:/msys64/ucrt64/include/apisetcconv.h \
+  C:/msys64/ucrt64/include/audioclient.h \
+  C:/msys64/ucrt64/include/audiopolicy.h \
+  C:/msys64/ucrt64/include/audiosessiontypes.h \
   C:/msys64/ucrt64/include/basetsd.h \
   C:/msys64/ucrt64/include/bcrypt.h \
   C:/msys64/ucrt64/include/bemapiset.h \
@@ -2621,6 +2624,7 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj: C:/Test_Program/VS_Code/ghostty-black
   C:/msys64/ucrt64/include/dde.h \
   C:/msys64/ucrt64/include/ddeml.h \
   C:/msys64/ucrt64/include/debugapi.h \
+  C:/msys64/ucrt64/include/devicetopology.h \
   C:/msys64/ucrt64/include/dlgs.h \
   C:/msys64/ucrt64/include/dpapi.h \
   C:/msys64/ucrt64/include/driverspecs.h \
@@ -2630,6 +2634,7 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj: C:/Test_Program/VS_Code/ghostty-black
   C:/msys64/ucrt64/include/dxgicommon.h \
   C:/msys64/ucrt64/include/dxgiformat.h \
   C:/msys64/ucrt64/include/dxgitype.h \
+  C:/msys64/ucrt64/include/endpointvolume.h \
   C:/msys64/ucrt64/include/errhandlingapi.h \
   C:/msys64/ucrt64/include/errno.h \
   C:/msys64/ucrt64/include/excpt.h \
@@ -2645,6 +2650,8 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj: C:/Test_Program/VS_Code/ghostty-black
   C:/msys64/ucrt64/include/ioapiset.h \
   C:/msys64/ucrt64/include/jobapi.h \
   C:/msys64/ucrt64/include/joystickapi.h \
+  C:/msys64/ucrt64/include/ks.h \
+  C:/msys64/ucrt64/include/ksmedia.h \
   C:/msys64/ucrt64/include/ktmtypes.h \
   C:/msys64/ucrt64/include/libloaderapi.h \
   C:/msys64/ucrt64/include/limits.h \
@@ -2657,9 +2664,11 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj: C:/Test_Program/VS_Code/ghostty-black
   C:/msys64/ucrt64/include/memoryapi.h \
   C:/msys64/ucrt64/include/minwinbase.h \
   C:/msys64/ucrt64/include/minwindef.h \
+  C:/msys64/ucrt64/include/mmdeviceapi.h \
   C:/msys64/ucrt64/include/mmeapi.h \
   C:/msys64/ucrt64/include/mmiscapi.h \
   C:/msys64/ucrt64/include/mmiscapi2.h \
+  C:/msys64/ucrt64/include/mmreg.h \
   C:/msys64/ucrt64/include/mmsyscom.h \
   C:/msys64/ucrt64/include/mmsystem.h \
   C:/msys64/ucrt64/include/msxml.h \
@@ -2683,6 +2692,8 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj: C:/Test_Program/VS_Code/ghostty-black
   C:/msys64/ucrt64/include/processtopologyapi.h \
   C:/msys64/ucrt64/include/profileapi.h \
   C:/msys64/ucrt64/include/propidl.h \
+  C:/msys64/ucrt64/include/propkeydef.h \
+  C:/msys64/ucrt64/include/propsys.h \
   C:/msys64/ucrt64/include/prsht.h \
   C:/msys64/ucrt64/include/psdk_inc/_fd_types.h \
   C:/msys64/ucrt64/include/psdk_inc/_ip_mreq1.h \
@@ -2726,6 +2737,7 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj: C:/Test_Program/VS_Code/ghostty-black
   C:/msys64/ucrt64/include/securitybaseapi.h \
   C:/msys64/ucrt64/include/servprov.h \
   C:/msys64/ucrt64/include/shellapi.h \
+  C:/msys64/ucrt64/include/shtypes.h \
   C:/msys64/ucrt64/include/signal.h \
   C:/msys64/ucrt64/include/specstrings.h \
   C:/msys64/ucrt64/include/stdarg.h \
@@ -2736,6 +2748,7 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj: C:/Test_Program/VS_Code/ghostty-black
   C:/msys64/ucrt64/include/stralign.h \
   C:/msys64/ucrt64/include/string.h \
   C:/msys64/ucrt64/include/stringapiset.h \
+  C:/msys64/ucrt64/include/structuredquerycondition.h \
   C:/msys64/ucrt64/include/swprintf.inl \
   C:/msys64/ucrt64/include/synchapi.h \
   C:/msys64/ucrt64/include/sys/timeb.h \
@@ -2747,6 +2760,7 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj: C:/Test_Program/VS_Code/ghostty-black
   C:/msys64/ucrt64/include/time.h \
   C:/msys64/ucrt64/include/timeapi.h \
   C:/msys64/ucrt64/include/timezoneapi.h \
+  C:/msys64/ucrt64/include/tlhelp32.h \
   C:/msys64/ucrt64/include/tvout.h \
   C:/msys64/ucrt64/include/unknwn.h \
   C:/msys64/ucrt64/include/unknwnbase.h \
@@ -2971,6 +2985,8 @@ C:/msys64/ucrt64/include/corecrt_wstdlib.h:
 
 C:/msys64/ucrt64/include/ole2.h:
 
+C:/msys64/ucrt64/include/mmdeviceapi.h:
+
 C:/msys64/ucrt64/include/c++/15.2.0/bits/std_abs.h:
 
 C:/msys64/ucrt64/include/c++/15.2.0/tr1/bessel_function.tcc:
@@ -3067,6 +3083,8 @@ C:/msys64/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/clwbintrin.h:
 
 C:/msys64/ucrt64/include/c++/15.2.0/ext/type_traits.h:
 
+C:/msys64/ucrt64/include/audiosessiontypes.h:
+
 C:/msys64/ucrt64/include/datetimeapi.h:
 
 C:/msys64/ucrt64/include/ktmtypes.h:
@@ -3123,9 +3141,9 @@ C:/msys64/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/raointintrin.h:
 
 C:/msys64/ucrt64/include/dlgs.h:
 
-C:/msys64/ucrt64/include/d3dcommon.h:
-
 C:/msys64/ucrt64/include/locale.h:
+
+C:/msys64/ucrt64/include/d3dcommon.h:
 
 C:/msys64/ucrt64/include/dde.h:
 
@@ -3184,6 +3202,8 @@ C:/msys64/ucrt64/include/windows.storage.search.h:
 C:/msys64/ucrt64/include/limits.h:
 
 C:/msys64/ucrt64/include/lzexpand.h:
+
+C:/msys64/ucrt64/include/audiopolicy.h:
 
 C:/msys64/ucrt64/include/malloc.h:
 
@@ -3252,6 +3272,8 @@ C:/msys64/ucrt64/include/oleidl.h:
 C:/msys64/ucrt64/include/playsoundapi.h:
 
 C:/Test_Program/VS_Code/ghostty-blackhole-main/src/imgui/imgui_impl_glfw.cpp:
+
+C:/msys64/ucrt64/include/structuredquerycondition.h:
 
 C:/msys64/ucrt64/include/poppack.h:
 
@@ -3383,6 +3405,8 @@ C:/msys64/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/avx512fp16intrin.h:
 
 C:/msys64/ucrt64/include/sysinfoapi.h:
 
+C:/msys64/ucrt64/include/shtypes.h:
+
 C:/msys64/ucrt64/include/c++/15.2.0/bits/charconv.h:
 
 C:/msys64/ucrt64/include/systemtopologyapi.h:
@@ -3427,6 +3451,8 @@ C:/msys64/ucrt64/include/windows.h:
 
 C:/msys64/ucrt64/include/winefs.h:
 
+C:/msys64/ucrt64/include/propkeydef.h:
+
 C:/msys64/ucrt64/include/winioctl.h:
 
 C:/msys64/ucrt64/include/winnetwk.h:
@@ -3441,9 +3467,9 @@ C:/msys64/ucrt64/include/winnt.h:
 
 C:/msys64/ucrt64/include/winreg.h:
 
-C:/msys64/ucrt64/include/winscard.h:
-
 C:/msys64/ucrt64/include/pthread_signal.h:
+
+C:/msys64/ucrt64/include/winscard.h:
 
 C:/msys64/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/shaintrin.h:
 
@@ -3557,11 +3583,11 @@ C:/msys64/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/avx512vldqintrin.h:
 
 C:/msys64/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/avx512vlintrin.h:
 
+C:/msys64/ucrt64/include/pthread_compat.h:
+
 C:/msys64/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/avx512vnniintrin.h:
 
 C:/msys64/ucrt64/include/GL/glcorearb.h:
-
-C:/msys64/ucrt64/include/pthread_compat.h:
 
 C:/msys64/ucrt64/include/sys/timeb.h:
 
@@ -3608,6 +3634,8 @@ C:/msys64/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/fma4intrin.h:
 C:/msys64/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/fmaintrin.h:
 
 C:/msys64/ucrt64/include/windows.storage.fileproperties.h:
+
+C:/msys64/ucrt64/include/devicetopology.h:
 
 C:/msys64/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/popcntintrin.h:
 
@@ -3723,9 +3751,9 @@ C:/msys64/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/xtestintrin.h:
 
 C:/msys64/ucrt64/include/c++/15.2.0/tuple:
 
-C:/Test_Program/VS_Code/ghostty-blackhole-main/src/capture_dxgi.h:
-
 C:/msys64/ucrt64/include/pthread.h:
+
+C:/Test_Program/VS_Code/ghostty-blackhole-main/src/capture_dxgi.h:
 
 C:/msys64/ucrt64/include/activation.h:
 
@@ -3740,6 +3768,8 @@ C:/msys64/ucrt64/include/c++/15.2.0/exception:
 C:/msys64/ucrt64/include/inspectable.h:
 
 C:/msys64/ucrt64/include/roapi.h:
+
+C:/msys64/ucrt64/include/audioclient.h:
 
 C:/msys64/ucrt64/include/windows.devices.geolocation.h:
 
@@ -3909,6 +3939,8 @@ C:/msys64/ucrt64/include/c++/15.2.0/cctype:
 
 C:/msys64/ucrt64/include/c++/15.2.0/cerrno:
 
+C:/msys64/ucrt64/include/ks.h:
+
 C:/msys64/ucrt64/include/c++/15.2.0/cwctype:
 
 C:/msys64/ucrt64/include/c++/15.2.0/ext/alloc_traits.h:
@@ -3943,7 +3975,15 @@ C:/msys64/ucrt64/include/commctrl.h:
 
 C:/msys64/ucrt64/include/dwmapi.h:
 
+C:/msys64/ucrt64/include/endpointvolume.h:
+
+C:/msys64/ucrt64/include/ksmedia.h:
+
+C:/msys64/ucrt64/include/mmreg.h:
+
 C:/msys64/ucrt64/include/process.h:
+
+C:/msys64/ucrt64/include/propsys.h:
 
 C:/msys64/ucrt64/include/pthread_time.h:
 
@@ -3956,6 +3996,8 @@ C:/msys64/ucrt64/include/signal.h:
 C:/msys64/ucrt64/include/sys/types.h:
 
 C:/msys64/ucrt64/include/time.h:
+
+C:/msys64/ucrt64/include/tlhelp32.h:
 
 C:/msys64/ucrt64/include/wchar.h:
 

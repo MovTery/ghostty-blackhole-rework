@@ -420,5 +420,17 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj: \
  C:/msys64/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/stdint.h \
  C:/msys64/ucrt64/include/stdint.h \
  C:/msys64/ucrt64/include/GLFW/glfw3native.h \
+ C:/msys64/ucrt64/include/mmdeviceapi.h \
+ C:/msys64/ucrt64/include/propsys.h C:/msys64/ucrt64/include/shtypes.h \
+ C:/msys64/ucrt64/include/structuredquerycondition.h \
+ C:/msys64/ucrt64/include/propkeydef.h \
+ C:/msys64/ucrt64/include/audiopolicy.h \
+ C:/msys64/ucrt64/include/audiosessiontypes.h \
+ C:/msys64/ucrt64/include/audioclient.h C:/msys64/ucrt64/include/mmreg.h \
+ C:/msys64/ucrt64/include/pshpack1.h C:/msys64/ucrt64/include/ks.h \
+ C:/msys64/ucrt64/include/ksmedia.h \
+ C:/msys64/ucrt64/include/endpointvolume.h \
+ C:/msys64/ucrt64/include/devicetopology.h \
+ C:/msys64/ucrt64/include/tlhelp32.h \
  C:/msys64/ucrt64/include/GL/glcorearb.h \
  C:/msys64/ucrt64/include/KHR/khrplatform.h
