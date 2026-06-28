@@ -10,6 +10,10 @@ struct Win32GL {
     HGLRC  hglrc  = nullptr;
     int    width  = 0;
     int    height = 0;
+    int    capOffX = 0;   // 捕获裁剪偏移（工作区左上角相对于全屏）
+    int    capOffY = 0;
+    int    capFullW = 0;  // 全屏分辨率
+    int    capFullH = 0;
     bool   active = false;
 };
 

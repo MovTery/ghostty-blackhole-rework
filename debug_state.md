@@ -2,20 +2,28 @@
 
 ## 当前状态
 编译 ✅ (2026-06-28)
-黑洞渲染 ✅ — DPI 修复后正常
+渲染 ✅ 黑洞正常显示
+任务栏 ✅ 可点击，无双任务栏
 
 ## 已解决的问题
 
-### 问题 A: 渲染不显示 (已修复)
-**根因**: `WS_EX_NOREDIRECTIONBITMAP` 在 CreateWindowEx 时就设置了，阻止了 DWM 为 OpenGL 双缓冲窗口创建合成表面。
+### 问题 A: 渲染不显示
+根因: WS_EX_NOREDIRECTIONBITMAP 过早设置
+修复: 从 CreateWindowEx 移除，移至 ShowWindow 之后
 
-**修复**: 从窗口创建参数中移除 `WS_EX_NOREDIRECTIONBITMAP`，精简 ShowWindow 后的 DWM 刷新操作。
+### 问题 B: DPI 缩放
+根因: 未声明 DPI 感知
+修复: main() 开头 SetProcessDPIAware()
 
-### 问题 B: 屏幕放大/只有左上角 (已修复)
-**根因**: 程序未声明 DPI 感知。`GetSystemMetrics` 在高 DPI 屏上返回虚拟化坐标(如 1280x720)，而不是物理分辨率(1920x1080)，导致窗口尺寸错误。
+### 问题 C: 双任务栏
+根因: WGC 捕获全屏但窗口仅覆盖工作区
+修复: 纹理上传时用 capOffX/capOffY 裁剪到工作区子区域
 
-**修复**: 在 main() 开头调用 `SetProcessDPIAware()`。
-
-## 仍然存在的问题
-- Win11 黄边框（DWM 边框颜色设置可能需要调整时机）
-- 诊断代码（红屏测试、日志文件）尚在代码中，后续清理
+## 架构
+```
+Win32窗口(工作区尺寸) + WGL OpenGL 3.3
+  ↓
+WGC捕获(全屏) → 纹理裁剪(工作区偏移) → OpenGL纹理
+  ↓
+黑洞Shader → SwapBuffers
+```

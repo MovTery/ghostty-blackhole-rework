@@ -54,6 +54,7 @@ static LRESULT CALLBACK WGLWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_CLOSE:        if (state) state->shouldClose = true; return 0;
     case WM_KEYDOWN:      if (wp == VK_ESCAPE && state) state->shouldClose = true; return 0;
     case WM_SIZE:         if (state) { state->newWidth = LOWORD(lp); state->newHeight = HIWORD(lp); } return 0;
+    case WM_NCHITTEST:    return HTTRANSPARENT;
     case WM_NCACTIVATE:   return FALSE;
     case WM_MOUSEACTIVATE:return MA_NOACTIVATEANDEAT;
     case WM_NCCALCSIZE:   return 0;
@@ -68,21 +69,16 @@ bool Win32GL_Init(Win32GL& wgl, const char* title, int width, int height) {
     wgl.active = false;
 
     int wx = 0, wy = 0;
+    wgl.capFullW = GetSystemMetrics(SM_CXSCREEN);
+    wgl.capFullH = GetSystemMetrics(SM_CYSCREEN);
     if (width <= 0 || height <= 0) {
-        // 使用工作区而非全屏尺寸，避免遮挡任务栏
-        RECT wa;
-        if (SystemParametersInfoW(SPI_GETWORKAREA, 0, &wa, 0)) {
-            wx     = wa.left;
-            wy     = wa.top;
-            width  = wa.right  - wa.left;
-            height = wa.bottom - wa.top;
-        } else {
-            width  = GetSystemMetrics(SM_CXSCREEN);
-            height = GetSystemMetrics(SM_CYSCREEN);
-        }
+        width  = wgl.capFullW;
+        height = wgl.capFullH;
     }
-    wgl.width  = width;
-    wgl.height = height;
+    wgl.capOffX = 0;
+    wgl.capOffY = 0;
+    wgl.width   = width;
+    wgl.height  = height;
 
     // 1. 注册窗口类
     WNDCLASSEXW wc = {};
@@ -99,7 +95,7 @@ bool Win32GL_Init(Win32GL& wgl, const char* title, int width, int height) {
 
     // 2. 创建窗口（全屏无边框桌面特效窗口）
     DWORD exStyle = WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW |
-                    WS_EX_TRANSPARENT;
+                    WS_EX_TRANSPARENT | WS_EX_LAYERED;
     DWORD style   = WS_POPUP;
 
     WCHAR wTitle[128];
@@ -114,6 +110,9 @@ bool Win32GL_Init(Win32GL& wgl, const char* title, int width, int height) {
         fprintf(stderr, "[Win32GL] CreateWindowEx failed: %lu\n", GetLastError());
         return false;
     }
+
+    // 分层窗口：设 alpha=255 保持不透明，但启用 DWM 分层合成以支持鼠标穿透
+    SetLayeredWindowAttributes(wgl.hwnd, 0, 255, LWA_ALPHA);
 
     // 3. 获取 DC
     wgl.hdc = GetDC(wgl.hwnd);
@@ -196,9 +195,10 @@ bool Win32GL_Init(Win32GL& wgl, const char* title, int width, int height) {
     DWMNCRENDERINGPOLICY ncrp = (DWMNCRENDERINGPOLICY)DWMNCRP_DISABLED;
     DwmSetWindowAttribute(wgl.hwnd, DWMWA_NCRENDERING_POLICY, &ncrp, sizeof(ncrp));
 
-    SetWindowDisplayAffinity(wgl.hwnd, WDA_EXCLUDEFROMCAPTURE);
+    if (!SetWindowDisplayAffinity(wgl.hwnd, WDA_EXCLUDEFROMCAPTURE))
+        fprintf(stderr, "[Win32GL] WDA_EXCLUDEFROMCAPTURE failed: %lu\n", GetLastError());
 
-    // 10. 显示窗口
+    // 10. 显示窗口（WS_EX_LAYERED + WS_EX_TRANSPARENT 处理鼠标穿透）
     SetWindowPos(wgl.hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     ShowWindow(wgl.hwnd, SW_SHOWNOACTIVATE);
