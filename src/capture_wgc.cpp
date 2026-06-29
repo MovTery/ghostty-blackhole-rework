@@ -1,4 +1,4 @@
-// capture_wgc.cpp  Windows Graphics Capture using WinRT C++ ABI
+﻿// capture_wgc.cpp  Windows Graphics Capture using WinRT C++ ABI
 // No C++/WinRT dependency. Cross-GPU (NVIDIA / AMD / Intel).
 #include "capture_wgc.h"
 
@@ -39,6 +39,7 @@ using WGC::IDirect3D11CaptureFramePoolStatics;
 using WGC::IDirect3D11CaptureFramePool;
 using WGC::IGraphicsCaptureSession;
 using WGC::IGraphicsCaptureSession2;
+using WGC::IGraphicsCaptureSession3;
 using WGC::IDirect3D11CaptureFrame;
 using WGC::IGraphicsCaptureItem;
 using WGD3D::IDirect3DDevice;
@@ -207,6 +208,24 @@ bool WGC_Init(WGCCapture& wgc) {
         fprintf(stderr, "[WGC] StartCapture failed: 0x%08X\n", (unsigned)hr);
         WGC_Release(wgc);
         return false;
+    }
+
+    // 10b. Try to disable capture border (Win11 yellow border)
+    {
+        IGraphicsCaptureSession3* sess3 = nullptr;
+        static const GUID IID_IGCS3 = { 0xf2cdd966, 0x22ae, 0x5ea1, {0x95,0x96, 0x3a,0x28,0x93,0x44,0xc3,0xbe}};
+        HRESULT hr3 = sess->QueryInterface(IID_IGCS3, (void**)&sess3);
+        if (SUCCEEDED(hr3) && sess3) {
+            boolean borderOff = false;
+            HRESULT hrBorder = sess3->put_IsBorderRequired(borderOff);
+            if (SUCCEEDED(hrBorder))
+                fprintf(stderr, "[WGC] IsBorderRequired set to false\n");
+            else
+                fprintf(stderr, "[WGC] IsBorderRequired(false) failed: 0x%08X\n", (unsigned)hrBorder);
+            sess3->Release();
+        } else {
+            fprintf(stderr, "[WGC] IGraphicsCaptureSession3 not available (pre-Win11?)\n");
+        }
     }
 
     // 11. Create staging texture for GPU->CPU readback

@@ -2835,8 +2835,10 @@ CMakeFiles/blackhole.dir/src/imgui/imgui_widgets.cpp.obj: C:/Test_Program/VS_Cod
 
 CMakeFiles/blackhole.dir/src/main.cpp.obj: C:/Test_Program/VS_Code/ghostty-blackhole-main/src/main.cpp \
   C:/msys64/ucrt64/include/GL/gl.h \
+  C:/msys64/ucrt64/include/GL/glcorearb.h \
   C:/msys64/ucrt64/include/GLFW/glfw3.h \
   C:/msys64/ucrt64/include/GLFW/glfw3native.h \
+  C:/msys64/ucrt64/include/KHR/khrplatform.h \
   C:/msys64/ucrt64/include/_bsd_types.h \
   C:/msys64/ucrt64/include/_mingw.h \
   C:/msys64/ucrt64/include/_mingw_mac.h \
@@ -2869,7 +2871,6 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj: C:/Test_Program/VS_Code/ghostty-black
   C:/msys64/ucrt64/include/c++/15.2.0/bits/cpp_type_traits.h \
   C:/msys64/ucrt64/include/c++/15.2.0/bits/cxxabi_forced.h \
   C:/msys64/ucrt64/include/c++/15.2.0/bits/cxxabi_init_exception.h \
-  C:/msys64/ucrt64/include/c++/15.2.0/bits/deque.tcc \
   C:/msys64/ucrt64/include/c++/15.2.0/bits/exception.h \
   C:/msys64/ucrt64/include/c++/15.2.0/bits/exception_defines.h \
   C:/msys64/ucrt64/include/c++/15.2.0/bits/exception_ptr.h \
@@ -2905,7 +2906,6 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj: C:/Test_Program/VS_Code/ghostty-black
   C:/msys64/ucrt64/include/c++/15.2.0/bits/stl_algobase.h \
   C:/msys64/ucrt64/include/c++/15.2.0/bits/stl_bvector.h \
   C:/msys64/ucrt64/include/c++/15.2.0/bits/stl_construct.h \
-  C:/msys64/ucrt64/include/c++/15.2.0/bits/stl_deque.h \
   C:/msys64/ucrt64/include/c++/15.2.0/bits/stl_function.h \
   C:/msys64/ucrt64/include/c++/15.2.0/bits/stl_iterator.h \
   C:/msys64/ucrt64/include/c++/15.2.0/bits/stl_iterator_base_funcs.h \
@@ -2936,7 +2936,6 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj: C:/Test_Program/VS_Code/ghostty-black
   C:/msys64/ucrt64/include/c++/15.2.0/cwctype \
   C:/msys64/ucrt64/include/c++/15.2.0/debug/assertions.h \
   C:/msys64/ucrt64/include/c++/15.2.0/debug/debug.h \
-  C:/msys64/ucrt64/include/c++/15.2.0/deque \
   C:/msys64/ucrt64/include/c++/15.2.0/exception \
   C:/msys64/ucrt64/include/c++/15.2.0/ext/alloc_traits.h \
   C:/msys64/ucrt64/include/c++/15.2.0/ext/atomicity.h \
@@ -3317,13 +3316,9 @@ CMakeFiles/blackhole.dir/src/main.cpp.obj: C:/Test_Program/VS_Code/ghostty-black
   C:/msys64/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/xtestintrin.h \
   C:/Test_Program/VS_Code/ghostty-blackhole-main/src/capture_dxgi.h \
   C:/Test_Program/VS_Code/ghostty-blackhole-main/src/capture_wgc.h \
-  C:/Test_Program/VS_Code/ghostty-blackhole-main/src/d3d11_renderer.h \
   C:/Test_Program/VS_Code/ghostty-blackhole-main/src/gl_texture.h \
   C:/Test_Program/VS_Code/ghostty-blackhole-main/src/gui_config.h \
-  C:/Test_Program/VS_Code/ghostty-blackhole-main/src/renderer_interface.h \
-  C:/Test_Program/VS_Code/ghostty-blackhole-main/src/texture_source.h \
-  C:/Test_Program/VS_Code/ghostty-blackhole-main/src/win32_gl.h \
-  C:/Test_Program/VS_Code/ghostty-blackhole-main/src/win32_window.h
+  C:/Test_Program/VS_Code/ghostty-blackhole-main/src/win32_gl.h
 
 CMakeFiles/blackhole.dir/src/win32_gl.cpp.obj: C:/Test_Program/VS_Code/ghostty-blackhole-main/src/win32_gl.cpp \
   C:/msys64/ucrt64/include/GL/gl.h \
@@ -4604,6 +4599,8 @@ C:/msys64/ucrt64/include/pthread_compat.h:
 
 C:/msys64/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/avx512vnniintrin.h:
 
+C:/msys64/ucrt64/include/GL/glcorearb.h:
+
 C:/msys64/ucrt64/include/sys/timeb.h:
 
 C:/msys64/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/avx512vp2intersectintrin.h:
@@ -4896,6 +4893,8 @@ C:/msys64/ucrt64/include/c++/15.2.0/bits/string_view.tcc:
 
 C:/msys64/ucrt64/include/c++/15.2.0/bits/stringfwd.h:
 
+C:/msys64/ucrt64/include/KHR/khrplatform.h:
+
 C:/msys64/ucrt64/include/c++/15.2.0/bits/uses_allocator_args.h:
 
 C:/msys64/ucrt64/include/c++/15.2.0/cctype:
@@ -5030,8 +5029,8 @@ C:/msys64/ucrt64/include/tlhelp32.h:
 
 C:/msys64/ucrt64/include/wctype.h:
 
-C:/Test_Program/VS_Code/ghostty-blackhole-main/src/win32_window.h:
-
 C:/Test_Program/VS_Code/ghostty-blackhole-main/src/win32_gl.cpp:
 
 C:/Test_Program/VS_Code/ghostty-blackhole-main/src/win32_window.cpp:
+
+C:/Test_Program/VS_Code/ghostty-blackhole-main/src/win32_window.h:
