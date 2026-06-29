@@ -296,12 +296,12 @@ static void GetProcessName(DWORD pid, char* out, int maxLen) {
     CloseHandle(snap);
 }
 
-// Check if current foreground window is a video app playing audio
+// Check if current foreground window is a video/game app that should suppress black hole
 static bool isWatchingVideo() {
     HWND fg = GetForegroundWindow();
     if (!fg) return false;
 
-    // Method 1: D3D fullscreen / presentation mode
+    // Method 1: D3D exclusive fullscreen (catches most fullscreen games)
     typedef enum { QUNS_NOT_PRESENT=1, QUNS_BUSY=2, QUNS_RUNNING_D3D_FULL_SCREEN=3,
                    QUNS_PRESENTATION_MODE=4 } QUNS;
     typedef HRESULT (WINAPI *PFN_QUNS)(QUNS*);
@@ -313,6 +313,16 @@ static bool isWatchingVideo() {
             return true;
     }
 
+    // Method 1b: any foreground window covering entire screen (borderless fullscreen games)
+    {
+        RECT r;
+        if (GetWindowRect(fg, &r)) {
+            int sw = GetSystemMetrics(SM_CXSCREEN), sh = GetSystemMetrics(SM_CYSCREEN);
+            int ww = r.right - r.left, wh = r.bottom - r.top;
+            if (ww >= sw && wh >= sh) return true;
+        }
+    }
+
     // Get foreground process name
     DWORD pid = 0;
     GetWindowThreadProcessId(fg, &pid);
@@ -320,7 +330,7 @@ static bool isWatchingVideo() {
     char pname[260]; GetProcessName(pid, pname, sizeof(pname));
     if (!pname[0]) return false;
 
-    // Check if process is a known video player or browser
+    // Check if process is a known video player, game launcher, or browser
     bool isVideo = (strstr(pname, "vlc") || strstr(pname, "mpv") || strstr(pname, "potplayer") ||
                     strstr(pname, "mpc") || strstr(pname, "wmplayer") || strstr(pname, "bilibili") ||
                     strstr(pname, "哔哩哔哩") || strstr(pname, "bili") ||
@@ -333,6 +343,12 @@ static bool isWatchingVideo() {
                     strstr(pname, "nvidia") ||
                     strstr(pname, "chrome") || strstr(pname, "msedge") || strstr(pname, "firefox") ||
                     strstr(pname, "opera") || strstr(pname, "brave"));
+    // Common game launchers (Steam overlay, EOS, Ubisoft Connect, etc.)
+    // These indicate user is likely in-game even if game exe name isn't matched
+    bool isGameLauncher = (strstr(pname, "steam") || strstr(pname, "epic") || strstr(pname, "ubisoft") ||
+                          strstr(pname, "ubiconnect") || strstr(pname, "eaapp") || strstr(pname, "origin") ||
+                          strstr(pname, "battlenet") || strstr(pname, "riot") || strstr(pname, "gog") ||
+                          strstr(pname, "xbox") || strstr(pname, "gamebar"));
     bool uwpDetected = false;
     // UWP apps run under ApplicationFrameHost.exe  check window title for media players
     if (!isVideo && strstr(pname, "applicationframehost")) {
@@ -347,15 +363,10 @@ static bool isWatchingVideo() {
             }
         }
     }
+    // Game launcher in foreground = user is gaming, skip audio check
+    if (isGameLauncher) return true;
+    // Not a known video app  no need for audio check
     if (!isVideo) return false;
-
-    // Method 2: window covers entire screen
-    RECT r;
-    if (GetWindowRect(fg, &r)) {
-        int sw = GetSystemMetrics(SM_CXSCREEN), sh = GetSystemMetrics(SM_CYSCREEN);
-        int ww = r.right - r.left, wh = r.bottom - r.top;
-        if (ww >= sw && wh >= sh) return true;
-    }
 
     // Method 3: check if this app has audio
     CoInitializeEx(NULL, COINIT_MULTITHREADED); // safe to call multiple times
@@ -555,7 +566,7 @@ int main(int argc, char* argv[]) {
         // Start renderer immediately in mode 0
         if (cfg.mode == 0) MonitorSpawn(selfPath);
 
-        SetTimer(monHwnd, 1, 5000, NULL);
+        SetTimer(monHwnd, 1, 1000, NULL);  // 1s detection for gaming responsiveness
         fprintf(stderr, "[Monitor] mode=%d idleSec=%d (tray icon ready)\n", cfg.mode, cfg.idleSec);
 
         MSG msg;
