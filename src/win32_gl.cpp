@@ -94,7 +94,7 @@ bool Win32GL_Init(Win32GL& wgl, const char* title, int width, int height) {
     if (!registered) { RegisterClassExW(&wc); registered = true; }
 
     // 2. 创建窗口（全屏无边框桌面特效窗口）
-    DWORD exStyle = WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW |
+    DWORD exStyle = WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TOOLWINDOW |
                     WS_EX_TRANSPARENT | WS_EX_LAYERED;
     DWORD style   = WS_POPUP;
 
