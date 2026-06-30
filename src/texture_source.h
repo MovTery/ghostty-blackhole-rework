@@ -1,4 +1,4 @@
-﻿// texture_source.h  纹理输入抽象层
+// texture_source.h  纹理输入抽象层
 // 将纹理来源与渲染器解耦 — Renderer 不需要知道纹理来自 WGC/DXGI/视频/图片/摄像头
 // 支持 D3D11 GPU 路径 (ID3D11Texture2D) 和 CPU 回读路径 (OpenGL 兼容)
 #pragma once

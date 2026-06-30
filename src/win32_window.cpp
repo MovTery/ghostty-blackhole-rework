@@ -1,4 +1,4 @@
-﻿// win32_window.cpp  Win32 原生窗口实现 (纯窗口, 无渲染 API)
+// win32_window.cpp  Win32 原生窗口实现 (纯窗口, 无渲染 API)
 // 从 win32_gl.cpp 抽取, 移除所有 WGL / OpenGL 代码
 #include "win32_window.h"
 #include <cstdio>

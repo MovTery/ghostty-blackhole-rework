@@ -1,4 +1,4 @@
-﻿// capture_wgc.cpp  Windows Graphics Capture using WinRT C++ ABI
+// capture_wgc.cpp  Windows Graphics Capture using WinRT C++ ABI
 // No C++/WinRT dependency. Cross-GPU (NVIDIA / AMD / Intel).
 #include "capture_wgc.h"
 

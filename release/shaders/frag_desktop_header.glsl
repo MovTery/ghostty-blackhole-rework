@@ -1,4 +1,4 @@
-﻿// frag_desktop_header.glsl  standalone header for full blackhole.glsl
+// frag_desktop_header.glsl  standalone header for full blackhole.glsl
 #version 330
 
 uniform vec3 iResolution;

@@ -1,4 +1,4 @@
-﻿// d3d11_renderer.h  D3D11 渲染器实现 (IRenderer)
+// d3d11_renderer.h  D3D11 渲染器实现 (IRenderer)
 // 使用共享 D3D11 Device, 通过 DXGI SwapChain 输出
 // GPU-only 管线: WGC 纹理 → CopyResource → ShaderResource → HLSL → Present
 #pragma once

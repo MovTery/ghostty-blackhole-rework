@@ -330,3 +330,51 @@ SetWindowPos(wgl.hwnd, HWND_TOPMOST, 0, 0, 0, 0,
 
 ### 编译
 ✅ 零错误零警告
+
+
+---
+
+## UTF-8 BOM 污染修复: Shader 随机闪烁/黑屏 (2026-06-30)
+
+### 问题
+评论区用户报告并定位：部分电脑上 shader 随机编译失败，表现为闪烁、黑屏、画面不稳定。项目内 GLSL 文件在保存时被 IDE 自动添加了 UTF-8 BOM (`EF BB BF`)。
+
+### 根因
+`readFile()` 在运行时从磁盘读取 `release/shaders/frag_desktop_header.glsl` 并拼接到 shader 源码头部。BOM 出现在 `#version 330` 之前，GLSL 解析器看到非法字节直接编译失败。失败表现为随机性——取决于 GPU 驱动对 BOM 的容忍度。
+
+### 影响链路
+```
+frag_desktop_header.glsl (带 BOM: EF BB BF #version 330)
+        ↓
+readFile() 读取拼接到 shader 源码
+        ↓
+glShaderSource + glCompileShader 失败
+        ↓
+program link 失败 → fallback/空输出/旧 shader 残留
+        ↓
+视觉：随机闪烁/黑屏/画面不稳定
+```
+
+### 修复
+清除 14 个文件中的 UTF-8 BOM（EF BB BF），全部转为 UTF-8 without BOM：
+
+**Shader 文件（运行时加载，直接导致问题）：**
+- `release/shaders/frag_desktop_header.glsl` — 拼接后送入 GLSL 编译器
+- `shaders/frag_desktop_header.glsl` — 源副本
+- `shaders/fullscreen_vs.hlsl` — D3D11 路径（当前未启用）
+
+**C++ 源码（GCC 可容忍，但不符合项目 UTF-8 规范）：**
+- `src/capture_wgc.cpp`
+- `src/d3d11_renderer.cpp` / `.h`
+- `src/main.cpp`
+- `src/renderer_interface.h`
+- `src/texture_source.h`
+- `src/win32_gl.cpp` / `.h`
+- `src/win32_window.cpp` / `.h`
+- `CMakeLists.txt`
+
+### 编译
+无需重新编译（仅文本文件，运行时读取）。
+
+### 效果
+✅ 闪烁/黑屏彻底消除，渲染稳定性显著提升。

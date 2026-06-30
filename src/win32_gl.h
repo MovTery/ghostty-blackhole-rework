@@ -1,4 +1,4 @@
-﻿// win32_gl.h  Win32 原生窗口 + WGL OpenGL 上下文
+// win32_gl.h  Win32 原生窗口 + WGL OpenGL 上下文
 // 替代 GLFW，直接控制桌面特效窗口属性（NOACTIVATE / TOOLWINDOW / TRANSPARENT）
 #pragma once
 #include <windows.h>

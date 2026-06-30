@@ -1,4 +1,4 @@
-﻿// d3d11_renderer.cpp  D3D11 渲染器实现
+// d3d11_renderer.cpp  D3D11 渲染器实现
 // GPU-only 管线: WGC frame → CopyResource → HLSL Pixel Shader → SwapChain Present
 #include "d3d11_renderer.h"
 #include <cstdio>

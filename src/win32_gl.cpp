@@ -1,4 +1,4 @@
-﻿// win32_gl.cpp  Win32 原生窗口 + WGL OpenGL 上下文实现
+// win32_gl.cpp  Win32 原生窗口 + WGL OpenGL 上下文实现
 // 替代 GLFW 渲染器窗口，直接控制所有桌面特效属性
 #include "win32_gl.h"
 #include <cstdio>

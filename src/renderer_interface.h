@@ -1,4 +1,4 @@
-﻿// renderer_interface.h  渲染器抽象接口
+// renderer_interface.h  渲染器抽象接口
 // 支持多后端: OpenGL / D3D11, 通过编译宏或运行时选择
 // Renderer 只接收 TextureFrame + Uniforms, 不关心纹理来源
 #pragma once

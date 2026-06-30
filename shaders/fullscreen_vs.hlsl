@@ -1,4 +1,4 @@
-﻿// fullscreen_vs.hlsl  D3D11 全屏四边形顶点着色器
+// fullscreen_vs.hlsl  D3D11 全屏四边形顶点着色器
 // 输入: 屏幕空间四边形顶点 [-1,1]×[-1,1]
 // 输出: 裁剪空间坐标 + UV [0,1]×[0,1]
 struct VSInput {

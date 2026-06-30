@@ -1,4 +1,4 @@
-﻿// blackhole standalone  Windows OpenGL host for blackhole.glsl
+// blackhole standalone  Windows OpenGL host for blackhole.glsl
 // v5: ImGui config panel + uniform-overridable shader params
 // Build: Ctrl+Shift+B in VS Code
 

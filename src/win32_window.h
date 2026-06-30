@@ -1,4 +1,4 @@
-﻿// win32_window.h  Win32 原生窗口 (不含任何渲染 API)
+// win32_window.h  Win32 原生窗口 (不含任何渲染 API)
 // 职责严格限定: 创建窗口 / 消息循环 / 窗口属性
 // 不包含 WGL / OpenGL / D3D11 / SwapChain 等渲染相关代码
 #pragma once
