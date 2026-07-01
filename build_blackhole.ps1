@@ -1,4 +1,8 @@
-$env:PATH = "C:\msys64\ucrt64\bin;C:\msys64\usr\bin;$env:PATH"
+param(
+    [string]$MsysRoot = "C:\msys64"
+)
+
+$env:PATH = "$MsysRoot\ucrt64\bin;$MsysRoot\usr\bin;$env:PATH"
 $ws = $PSScriptRoot
 $glfw = "$ws\third_party"
 
@@ -82,9 +86,9 @@ $compileArgs += @(
     "-I", "$ws\build",
     "-I", "$ws\src\imgui",
     "-I", "$glfw\include",
-    "-I", "C:\msys64\ucrt64\include",
+    "-I", "$MsysRoot\ucrt64\include",
     "-L", "$glfw\lib-mingw-w64",
-    "-L", "C:\msys64\ucrt64\lib",
+    "-L", "$MsysRoot\ucrt64\lib",
     "-lglfw3", "-lopengl32", "-lgdi32", "-ld3d11", "-ldxgi",
     "-lruntimeobject", "-ldwmapi", "-lcomctl32", "-lole32",
     "-mwindows"
