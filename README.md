@@ -2,6 +2,8 @@
 
 详细信息请查看原项目 [ghostty-blackhole-main](https://github.com/XboxNahida/ghostty-blackhole-main/blob/main/README.md)，我只是觉得原本的项目有点不太行，包括但不限于发行包直接打包进源码里、imgui 不跟窗口，非常割裂、未提供 Actions 构建脚本等问题
 
+项目协议：[MIT](./LICENSE)
+
 ## 改动
 
 - 使 imgui 始终跟随窗口变化，隐藏自带的缩放手柄
