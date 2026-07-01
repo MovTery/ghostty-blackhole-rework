@@ -49,4 +49,4 @@ uniform float uHomeY = 0.04;       // initial hole home Y (0=top, 1=bottom)
 uniform float uRandPhase = 0.0;    // random phase offset for trajectory
 uniform float uPresetOffset = 0.0; // random time offset for preset cycling (seconds)
 
-#define fragColor gl_FragColor
+out vec4 fragColor;

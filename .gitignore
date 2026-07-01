@@ -7,3 +7,5 @@ tuner/dist/
 
 # Build outputs (CMake intermediate files)
 build/
+
+.vs/*

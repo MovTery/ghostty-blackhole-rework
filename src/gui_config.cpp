@@ -9,6 +9,8 @@
 #include <cstdlib>
 #include <windows.h>
 
+extern char g_exeDir[MAX_PATH];  // main.cpp 中定义，exe 所在绝对路径
+
 static void SetAutoStart(bool enable) {
     HKEY hKey;
     const char* keyPath = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
@@ -17,7 +19,10 @@ static void SetAutoStart(bool enable) {
     
     if (RegOpenKeyExA(HKEY_CURRENT_USER, keyPath, 0, KEY_SET_VALUE, &hKey) == ERROR_SUCCESS) {
         if (enable) {
-            RegSetValueExA(hKey, "BlackholeScreensaver", 0, REG_SZ, (const BYTE*)exePath, strlen(exePath) + 1);
+            // 开机自启时加 --autostart 参数，跳过配置窗口直接以保存的预设启动
+            char cmdLine[MAX_PATH + 32];
+            snprintf(cmdLine, sizeof(cmdLine), "\"%s\" --autostart", exePath);
+            RegSetValueExA(hKey, "BlackholeScreensaver", 0, REG_SZ, (const BYTE*)cmdLine, strlen(cmdLine) + 1);
         } else {
             RegDeleteValueA(hKey, "BlackholeScreensaver");
         }
@@ -68,10 +73,12 @@ void SavePresetsToFile(const BlackholeConfig& cfg, const char names[64][64]) {
     // 更新注册表开机自启设置
     SetAutoStart(cfg.autoStart);
     
-    FILE* f = fopen("blackhole_presets.txt", "w");
+    char path[MAX_PATH];
+    snprintf(path, MAX_PATH, "%s\\blackhole_presets.txt", g_exeDir);
+    FILE* f = fopen(path, "w");
     if (!f) return;
-    fprintf(f, "# Blackhole Presets v4\n");
-    fprintf(f, "%d %d %.3f %d %d %d\n", cfg.mode, cfg.idleSec, cfg.slotSec, cfg.playMode, (int)cfg.videoAsIdle, (int)cfg.autoStart);
+    fprintf(f, "# Blackhole Presets v5\n");
+    fprintf(f, "%d %d %.3f %d %d %d %d\n", cfg.mode, cfg.idleSec, cfg.slotSec, cfg.playMode, (int)cfg.videoAsIdle, (int)cfg.autoStart, cfg.selPreset);
     fprintf(f, "%d\n", cfg.presetCount);
     for (int i = 0; i < cfg.presetCount; i++) {
         const DiskPreset& p = cfg.presets[i];
@@ -85,12 +92,16 @@ void SavePresetsToFile(const BlackholeConfig& cfg, const char names[64][64]) {
 }
 
 bool LoadPresetsFromFile(BlackholeConfig& cfg, char names[64][64]) {
-    FILE* f = fopen("blackhole_presets.txt", "r");
+    char path[MAX_PATH];
+    snprintf(path, MAX_PATH, "%s\\blackhole_presets.txt", g_exeDir);
+    FILE* f = fopen(path, "r");
     if (!f) return false;
     char line[256];
     if (!fgets(line, sizeof(line), f)) { fclose(f); return false; } // skip comment
     // 检查版本号：低于 v4 则用新默认预设
-    if (!strstr(line, "v4")) {
+    bool isV5 = (strstr(line, "v5") != nullptr);
+    bool isV4 = (strstr(line, "v4") != nullptr);
+    if (!isV4 && !isV5) {
         fclose(f);
         InitDefaultPresets(cfg);
         for (int i = 0; i < cfg.presetCount && i < 16; i++) {
@@ -100,17 +111,24 @@ bool LoadPresetsFromFile(BlackholeConfig& cfg, char names[64][64]) {
         return false;
     }
     if (!fgets(line, sizeof(line), f)) { fclose(f); return false; }
-    // Try v3 format (mode idleSec slotSec playMode videoAsIdle autoStart)
-    int mode=1, idle=300, pmode=1, vidAsIdle=0, autoSt=0; float ss=5.25f;
-    int nf = sscanf(line, "%d %d %f %d %d %d", &mode, &idle, &ss, &pmode, &vidAsIdle, &autoSt);
+    // Parse header: mode idleSec slotSec playMode videoAsIdle autoStart [selPreset]
+    int mode=1, idle=300, pmode=1, vidAsIdle=0, autoSt=0, selP=0; float ss=5.25f;
+    int nf;
+    if (isV5) {
+        nf = sscanf(line, "%d %d %f %d %d %d %d", &mode, &idle, &ss, &pmode, &vidAsIdle, &autoSt, &selP);
+    } else {
+        nf = sscanf(line, "%d %d %f %d %d %d", &mode, &idle, &ss, &pmode, &vidAsIdle, &autoSt);
+    }
     if (nf >= 3) {
         cfg.mode = mode; cfg.idleSec = idle; cfg.slotSec = ss; cfg.playMode = pmode;
         cfg.videoAsIdle = (nf >= 5) ? (bool)vidAsIdle : false;
         cfg.autoStart = (nf >= 6) ? (bool)autoSt : false;
+        cfg.selPreset = (isV5 && nf >= 7) ? selP : 0;
         if (!fgets(line, sizeof(line), f)) { fclose(f); return false; }
     } else {
         cfg.mode = 1; cfg.idleSec = 300; cfg.slotSec = 5.25f; cfg.playMode = 1;
         cfg.videoAsIdle = false; cfg.autoStart = false;
+        cfg.selPreset = 0;
     }
     int count = atoi(line);
     if (count < 1 || count > 64) { fclose(f); return false; }
@@ -127,6 +145,8 @@ bool LoadPresetsFromFile(BlackholeConfig& cfg, char names[64][64]) {
             &p.wind, &p.speed, &p.expo, &p.star);
     }
     cfg.presetCount = count;
+    // 边界检查 selPreset
+    if (cfg.selPreset < 0 || cfg.selPreset >= count) cfg.selPreset = 0;
     fclose(f);
     return true;
 }
@@ -134,13 +154,30 @@ bool LoadPresetsFromFile(BlackholeConfig& cfg, char names[64][64]) {
 bool GUI_ShowConfigPanel(BlackholeConfig& cfg) {
     if (cfg.presetCount == 0) InitDefaultPresets(cfg);
 
+    // 检测 DPI 缩放因子（高 DPI 屏幕上自动放大窗口和字体）
+    float dpiScale = 1.0f;
+    {
+        HDC hdc = GetDC(NULL);
+        if (hdc) {
+            int dpi = GetDeviceCaps(hdc, LOGPIXELSY);
+            ReleaseDC(NULL, hdc);
+            dpiScale = (float)dpi / 96.0f;  // 96 DPI = 100%
+        }
+        if (dpiScale < 1.0f) dpiScale = 1.0f;
+    }
+    int baseW = (int)(900 * dpiScale);
+    int baseH = (int)(620 * dpiScale);
+    float fontSize = 16.0f * dpiScale;
+    if (fontSize < 14.0f) fontSize = 14.0f;
+    if (fontSize > 36.0f) fontSize = 36.0f;
+
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_DECORATED, GL_TRUE);
+    glfwWindowHint(GLFW_DECORATED, GLFW_TRUE);
     glfwWindowHint(GLFW_RESIZABLE, GL_TRUE);
 
-    GLFWwindow* win = glfwCreateWindow(900, 620, "Black Hole Config", nullptr, nullptr);
+    GLFWwindow* win = glfwCreateWindow(baseW, baseH, "Black Hole Config", nullptr, nullptr);
     if (!win) return true;
     glfwMakeContextCurrent(win);
     glfwSwapInterval(1);
@@ -150,8 +187,11 @@ bool GUI_ShowConfigPanel(BlackholeConfig& cfg) {
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.IniFilename = nullptr;
     ImGui::StyleColorsDark();
+    // 全局缩放：字体 + 控件大小
+    io.FontGlobalScale = 1.0f;
+    ImGui::GetStyle().ScaleAllSizes(dpiScale);
     static const ImWchar ranges[] = { 0x0020, 0x00FF, 0x4E00, 0x9FFF, 0 };
-    io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/msyh.ttc", 16.0f, nullptr, ranges);
+    io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/msyh.ttc", fontSize, nullptr, ranges);
     io.Fonts->Build();
     ImGui_ImplGlfw_InitForOpenGL(win, true);
     ImGui_ImplOpenGL3_Init("#version 330");
@@ -167,24 +207,49 @@ bool GUI_ShowConfigPanel(BlackholeConfig& cfg) {
             snprintf(presetName[i], 64, "Custom %d", i + 1);
     }
 
-    int selPreset = 0;
+    int selPreset = cfg.selPreset;
+    if (selPreset < 0 || selPreset >= cfg.presetCount) selPreset = 0;
     const char* modes[] = { "始终显示", "空闲检测" };
     bool done = false;
 
     while (!glfwWindowShouldClose(win) && !done) {
         glfwPollEvents();
+
+        // 每帧获取当前 GLFW 窗口实际大小，动态调整布局
+        int winW, winH;
+        glfwGetWindowSize(win, &winW, &winH);
+        if (winW < 640) winW = 640;
+        if (winH < 480) winH = 480;
+
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        // 底部按钮尺寸（DPI 感知）
+        float btnW = 180.0f * dpiScale;
+        float btnH = 45.0f * dpiScale;
+        if (btnW < 150.0f) btnW = 150.0f;
+        if (btnH < 35.0f)  btnH = 35.0f;
+
+        // 子面板可用高度 = 窗口高 - 底部栏（Spacing + Separator + 间距 + 按钮 + WindowPadding）
+        float bottomBarH = ImGui::GetStyle().ItemSpacing.y * 3
+                           + ImGui::GetFrameHeightWithSpacing()
+                           + btnH
+                           + ImGui::GetStyle().WindowPadding.y;
+        float leftW  = winW * 0.28f;
+        if (leftW < 240.0f) leftW = 240.0f;
+        float rightW = winW - leftW - ImGui::GetStyle().ItemSpacing.x;
+        float childH = (float)winH - bottomBarH;
+        if (childH < 300.0f) childH = 300.0f;
+
         ImGui::SetNextWindowPos(ImVec2(0, 0));
-        ImGui::SetNextWindowSize(ImVec2(900, 620));
+        ImGui::SetNextWindowSize(ImVec2((float)winW, (float)winH));
         ImGui::Begin("黑洞设置", nullptr,
             ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
 
         // Left panel: preset list + mode
-        ImGui::BeginChild("left", ImVec2(260, 560), true);
+        ImGui::BeginChild("left", ImVec2(leftW, childH), true);
         ImGui::TextColored(ImVec4(0.4f,0.7f,1.0f,1.0f), "轮播预设");
 
         // Mode
@@ -264,24 +329,27 @@ bool GUI_ShowConfigPanel(BlackholeConfig& cfg) {
             InitDefaultPresets(cfg);
             for (int i = 0; i < 8; i++) strcpy(presetName[i], PRESET_NAMES[i]);
             cfg.presetCount = 8;
+            cfg.selPreset = 0;
             selPreset = 0;
         }
 
         ImGui::Spacing();
         if (ImGui::Button("保存配置", ImVec2(120,30))) {
+            cfg.selPreset = selPreset;
             SavePresetsToFile(cfg, presetName);
         }
         ImGui::SameLine();
         if (ImGui::Button("加载配置", ImVec2(120,30))) {
             if (LoadPresetsFromFile(cfg, presetName)) {
-                selPreset = 0;
+                selPreset = cfg.selPreset;
+                if (selPreset < 0 || selPreset >= cfg.presetCount) selPreset = 0;
             }
         }
         ImGui::EndChild();
 
         // Right panel: edit selected preset
         ImGui::SameLine();
-        ImGui::BeginChild("right", ImVec2(620, 560), true);
+        ImGui::BeginChild("right", ImVec2(rightW, childH), true);
 
         DiskPreset& p = cfg.presets[selPreset];
         char pname[64];
@@ -332,13 +400,17 @@ bool GUI_ShowConfigPanel(BlackholeConfig& cfg) {
 
         ImGui::EndChild();
 
-        // Bottom bar
+        // Bottom bar — 启动按钮水平居中
         ImGui::Spacing();
         ImGui::Separator();
-        ImGui::SetCursorPosX(350);
-        if (ImGui::Button("启  动", ImVec2(180, 45))) {
+        float btnX = ((float)winW - btnW) * 0.5f;
+        if (btnX < 0.0f) btnX = 0.0f;
+        ImGui::SetCursorPosX(btnX);
+        if (ImGui::Button("启  动", ImVec2(btnW, btnH))) {
             cfg.confirmed = true;
+            cfg.selPreset = selPreset;
             done = true;
+            SavePresetsToFile(cfg, presetName);
         }
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(0.5f,0.5f,0.5f,1.0f), "  ESC 退出");

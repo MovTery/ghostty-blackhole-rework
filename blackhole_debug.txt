@@ -1,2 +1,0 @@
-========== BLACKHOLE START ==========
-[Init] isRenderer=0, argc=1

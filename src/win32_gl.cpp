@@ -25,6 +25,9 @@
 #ifndef WGL_CONTEXT_PROFILE_MASK_ARB
 #define WGL_CONTEXT_PROFILE_MASK_ARB       0x9126
 #endif
+#ifndef WGL_CONTEXT_CORE_PROFILE_BIT_ARB
+#define WGL_CONTEXT_CORE_PROFILE_BIT_ARB   0x00000001
+#endif
 #ifndef WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB
 #define WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB 0x00000002
 #endif
@@ -158,16 +161,33 @@ bool Win32GL_Init(Win32GL& wgl, const char* title, int width, int height) {
     PFN_wglCreateContextAttribsARB wglCreateContextAttribsARB =
         (PFN_wglCreateContextAttribsARB)wglGetProcAddress("wglCreateContextAttribsARB");
 
-    // 7. 创建 OpenGL 3.3 兼容上下文
+    // 7. 创建 OpenGL 3.3 上下文（优先 Core Profile，AMD 更稳定）
     if (wglCreateContextAttribsARB) {
-        int attribs[] = {
+        // 先尝试 Core Profile（AMD 驱动对此路径支持更好）
+        int coreAttribs[] = {
             WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
             WGL_CONTEXT_MINOR_VERSION_ARB, 3,
-            WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
+            WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
             WGL_CONTEXT_FLAGS_ARB,         0,
             0
         };
-        wgl.hglrc = wglCreateContextAttribsARB(wgl.hdc, nullptr, attribs);
+        wgl.hglrc = wglCreateContextAttribsARB(wgl.hdc, nullptr, coreAttribs);
+        if (wgl.hglrc) {
+            fprintf(stderr, "[Win32GL] OpenGL 3.3 Core Profile created\n");
+        } else {
+            // 回退到 Compatibility Profile
+            fprintf(stderr, "[Win32GL] Core profile failed (err=%lu), trying compatibility\n", GetLastError());
+            int compatAttribs[] = {
+                WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
+                WGL_CONTEXT_MINOR_VERSION_ARB, 3,
+                WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
+                WGL_CONTEXT_FLAGS_ARB,         0,
+                0
+            };
+            wgl.hglrc = wglCreateContextAttribsARB(wgl.hdc, nullptr, compatAttribs);
+            if (wgl.hglrc)
+                fprintf(stderr, "[Win32GL] OpenGL 3.3 Compatibility Profile created\n");
+        }
     }
     if (!wgl.hglrc) {
         fprintf(stderr, "[Win32GL] wglCreateContextAttribsARB failed, fallback\n");

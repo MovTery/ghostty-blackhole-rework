@@ -10,8 +10,6 @@
 #include <cmath>
 #include <ctime>
 #include <string>
-#include <fstream>
-#include <sstream>
 #include <vector>
 #include <cstring>
 #include <windows.h>
@@ -23,6 +21,7 @@
 #include "gl_texture.h"
 #include "gui_config.h"
 #include "win32_gl.h"
+#include "embedded_shaders.h"   // 着色器内嵌（构建时自动生成）
 #ifdef BLACKHOLE_USE_D3D11
 #include "d3d11_renderer.h"
 #include "win32_window.h"
@@ -44,6 +43,42 @@
 #include <endpointvolume.h>
 #include <tlhelp32.h>
 // === DEBUG LOGGING ===
+
+// 崩溃处理器：捕获 access violation 等异常，写入日志（不依赖任何已损坏的状态）
+static FILE* g_debugLog = nullptr;
+
+static LONG WINAPI CrashHandler(_EXCEPTION_POINTERS* ep) {
+    if (g_debugLog) {
+        fprintf(g_debugLog, "\n[CRASH] !!! UNHANDLED EXCEPTION !!!\n");
+        fprintf(g_debugLog, "[CRASH] Exception code: 0x%08X\n", (unsigned)ep->ExceptionRecord->ExceptionCode);
+        fprintf(g_debugLog, "[CRASH] Exception addr: 0x%p\n", ep->ExceptionRecord->ExceptionAddress);
+        // 解码常见异常码
+        const char* name = "Unknown";
+        switch (ep->ExceptionRecord->ExceptionCode) {
+        case EXCEPTION_ACCESS_VIOLATION:    name = "ACCESS_VIOLATION"; break;
+        case EXCEPTION_ARRAY_BOUNDS_EXCEEDED: name="ARRAY_BOUNDS"; break;
+        case EXCEPTION_ILLEGAL_INSTRUCTION: name="ILLEGAL_INSTRUCTION"; break;
+        case EXCEPTION_STACK_OVERFLOW:      name="STACK_OVERFLOW"; break;
+        case EXCEPTION_INT_DIVIDE_BY_ZERO:  name="DIVIDE_BY_ZERO"; break;
+        case EXCEPTION_FLT_DIVIDE_BY_ZERO:  name="FLOAT_DIVIDE_BY_ZERO"; break;
+        case EXCEPTION_IN_PAGE_ERROR:       name="IN_PAGE_ERROR"; break;
+        case EXCEPTION_PRIV_INSTRUCTION:    name="PRIV_INSTRUCTION"; break;
+        case 0xE06D7363:                    name="C++_EXCEPTION"; break;
+        }
+        fprintf(g_debugLog, "[CRASH] Type: %s\n", name);
+        if (ep->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) {
+            ULONG_PTR info0 = ep->ExceptionRecord->ExceptionInformation[0];
+            ULONG_PTR info1 = ep->ExceptionRecord->ExceptionInformation[1];
+            fprintf(g_debugLog, "[CRASH] Access: %s at address 0x%p\n",
+                    info0 == 0 ? "READ" : (info0 == 1 ? "WRITE" : "EXECUTE"),
+                    (void*)info1);
+        }
+        fflush(g_debugLog);
+        fclose(g_debugLog);
+        g_debugLog = nullptr;
+    }
+    return EXCEPTION_EXECUTE_HANDLER;  // 让进程终止（会触发 WER 报告）
+}
 
 #ifndef BLACKHOLE_USE_D3D11
 #ifndef GL_COMPILE_STATUS
@@ -128,24 +163,6 @@ static bool loadGLFunctions() {
 #endif
 
 #ifndef BLACKHOLE_USE_D3D11
-static std::string readFile(const char* path) {
-    std::ifstream f(path, std::ios::in | std::ios::binary);
-    if (!f) { fprintf(stderr, "Cannot open %s\n", path); return ""; }
-    std::stringstream ss; ss << f.rdbuf();
-    std::string content = ss.str();
-    
-    // 移除 UTF-8 BOM (0xEF 0xBB 0xBF) - 使用 unsigned char 比较
-    if (content.size() >= 3) {
-        unsigned char c0 = static_cast<unsigned char>(content[0]);
-        unsigned char c1 = static_cast<unsigned char>(content[1]);
-        unsigned char c2 = static_cast<unsigned char>(content[2]);
-        if (c0 == 0xEF && c1 == 0xBB && c2 == 0xBF) {
-            content = content.substr(3);
-        }
-    }
-    return content;
-}
-
 static GLuint compileShader(GLenum type, const std::string& source, FILE* debugLog) {
     GLuint shader = gl_CreateShader(type);
     const char* src = source.c_str();
@@ -196,12 +213,15 @@ static GLuint createProgram(const std::string& vert, const std::string& frag, FI
 }
 
 static bool buildFragmentShader(std::string& out, FILE* debugLog) {
-    std::string header = readFile("shaders/frag_desktop_header.glsl");
-    std::string body   = readFile("blackhole.glsl");
+    if (debugLog) { fprintf(debugLog, "[Shader] Step 1: using embedded frag_desktop_header.glsl (%zu bytes)...\n", strlen(g_frag_header_src)); fflush(debugLog); }
+    if (debugLog) { fprintf(debugLog, "[Shader] Step 2: using embedded blackhole.glsl (%zu bytes)...\n", strlen(g_blackhole_src)); fflush(debugLog); }
+    std::string header = g_frag_header_src;
+    std::string body   = g_blackhole_src;
     if (header.empty() || body.empty()) {
-        if (debugLog) { fprintf(debugLog, "[FAIL] Shader file empty: header=%zu, body=%zu\n", header.size(), body.size()); fflush(debugLog); }
+        if (debugLog) { fprintf(debugLog, "[FAIL] Embedded shader empty: header=%zu, body=%zu\n", header.size(), body.size()); fflush(debugLog); }
         return false;
     }
+    if (debugLog) { fprintf(debugLog, "[Shader] Step 3: both files loaded OK (header=%zu, body=%zu)\n", header.size(), body.size()); fflush(debugLog); }
     
     // 检查是否还有 BOM
     if (debugLog) {
@@ -217,6 +237,7 @@ static bool buildFragmentShader(std::string& out, FILE* debugLog) {
     }
 
     // Make key constants overridable by uniforms
+    if (debugLog) { fprintf(debugLog, "[Shader] Step 4: overriding tunables...\n"); fflush(debugLog); }
     struct { const char* name; const char* uniform; } ov[] = {
         {"HOLE_RADIUS", "uHoleRadius > 0.0 ? uHoleRadius :"},
         {"DISK_GAIN",   "uDiskGain > 0.0 ? uDiskGain :"},
@@ -240,6 +261,7 @@ static bool buildFragmentShader(std::string& out, FILE* debugLog) {
     }
 
     // Add custom demoLook that checks uUseCustom
+    if (debugLog) { fprintf(debugLog, "[Shader] Step 5: replacing demoLook...\n"); fflush(debugLog); }
     {
         size_t dlo = body.find("DiskLook demoLook()");
         if (dlo != std::string::npos) {
@@ -376,6 +398,7 @@ static bool buildFragmentShader(std::string& out, FILE* debugLog) {
 
     out = header + "\n// ===== blackhole.glsl =====" + body +
           "\nvoid main() { vec4 c; vec2 fc = vec2(gl_FragCoord.x, iResolution.y - gl_FragCoord.y); mainImage(c, fc); fragColor = c; }\n";
+    if (debugLog) { fprintf(debugLog, "[Shader] Step 6: final shader built (%zu bytes)\n", out.size()); fflush(debugLog); }
     return true;
 }
 #endif
@@ -583,16 +606,41 @@ static bool isIdle(DWORD ms) {
 
 // ---- Renderer process management (monitor mode) ----
 static PROCESS_INFORMATION g_pi = {};
+static DWORD g_lastSpawnTick = 0;       // 上次生成时间
+static int   g_crashCount     = 0;       // 连续崩溃计数
+static DWORD g_crashWindowStart = 0;     // 崩溃窗口起始时间
+char g_exeDir[MAX_PATH] = "";            // exe 所在目录，供日志/配置文件读写
 
 static void MonitorSpawn(const char* selfPath) {
     if (g_pi.hProcess) return;
+
+    // 反崩溃循环：3秒内最多生成1次；30秒内连续崩溃>5次则停止2分钟
+    DWORD now = GetTickCount();
+    if (g_lastSpawnTick && (now - g_lastSpawnTick) < 3000) return;
+
+    if (g_crashWindowStart && (now - g_crashWindowStart) > 30000) {
+        g_crashCount = 0;       // 30秒窗口已过，重置
+        g_crashWindowStart = 0;
+    }
+    if (g_crashCount >= 5) {
+        fprintf(stderr, "[Monitor] Too many crashes (%d), pausing for 120s\n", g_crashCount);
+        g_crashCount = 0;
+        g_crashWindowStart = 0;
+        g_lastSpawnTick = now + 120000;  // 静默 2 分钟
+        return;
+    }
+    if (!g_crashWindowStart) g_crashWindowStart = now;
+
+    g_lastSpawnTick = now;
     STARTUPINFOA si = {}; si.cb = sizeof(si);
     si.dwFlags = STARTF_USESHOWWINDOW;
     si.wShowWindow = SW_HIDE;
     char cmd[MAX_PATH + 16];
     snprintf(cmd, sizeof(cmd), "\"%s\" --render", selfPath);
-    if (CreateProcessA(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &g_pi))
+    if (CreateProcessA(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &g_pi)) {
         CloseHandle(g_pi.hThread);
+        fprintf(stderr, "[Monitor] Spawned renderer (attempt %d)\n", g_crashCount + 1);
+    }
 }
 
 static HWND FindWindowByPID(DWORD pid) {
@@ -608,6 +656,9 @@ static HWND FindWindowByPID(DWORD pid) {
 
 static void MonitorKill() {
     if (!g_pi.hProcess) return;
+    // 主动 kill 不算崩溃，重置计数
+    g_crashCount = 0;
+    g_crashWindowStart = 0;
     HWND hwnd = FindWindowByPID(g_pi.dwProcessId);
     if (hwnd) {
         PostMessage(hwnd, WM_CLOSE, 0, 0);
@@ -625,9 +676,31 @@ static bool MonitorRunning() {
     DWORD code;
     if (GetExitCodeProcess(g_pi.hProcess, &code) && code == STILL_ACTIVE)
         return true;
+    // 进程已退出 → 视为一次崩溃
+    if (code != 0) {
+        g_crashCount++;
+        fprintf(stderr, "[Monitor] Renderer exited with code %lu (crash #%d)\n", code, g_crashCount);
+    }
     CloseHandle(g_pi.hProcess);
     g_pi.hProcess = NULL;
     return false;
+}
+
+// 杀死除自身外的所有 blackhole.exe 进程
+static void KillOtherBlackholeProcesses() {
+    DWORD myPid = GetCurrentProcessId();
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (!snap || snap == INVALID_HANDLE_VALUE) return;
+    PROCESSENTRY32 pe = { sizeof(pe) };
+    if (Process32First(snap, &pe)) {
+        do {
+            if (stricmp(pe.szExeFile, "blackhole.exe") == 0 && pe.th32ProcessID != myPid) {
+                HANDLE h = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
+                if (h) { TerminateProcess(h, 0); CloseHandle(h); }
+            }
+        } while (Process32Next(snap, &pe));
+    }
+    CloseHandle(snap);
 }
 
 // ---- Main ----
@@ -635,10 +708,11 @@ int main(int argc, char* argv[]) {
     ShowWindow(GetConsoleWindow(), SW_HIDE);
     SetProcessDPIAware();  // 声明 DPI 感知，防止 Windows 虚拟化缩放
 
-    // Set working directory to project root
+    // Set working directory to project root; also remember exe dir for file I/O
     {
         char p[MAX_PATH]; GetModuleFileNameA(nullptr, p, MAX_PATH);
         char* s = strrchr(p, '\\'); if (s) *s = 0;
+        strcpy(g_exeDir, p);  // exe 所在目录（绝对路径）
         s = strrchr(p, '\\');
         if (s && (strcmp(s+1,"build")==0 || strcmp(s+1,"Build")==0)) *s = 0;
         SetCurrentDirectoryA(p);
@@ -647,31 +721,28 @@ int main(int argc, char* argv[]) {
     bool isRenderer = (argc >= 2 && strcmp(argv[1], "--render") == 0);
     bool isConfig = (argc >= 2 && strcmp(argv[1], "--config") == 0);
     bool isMonitor = (argc >= 2 && strcmp(argv[1], "--monitor") == 0);
+    bool isAutostart = (argc >= 2 && strcmp(argv[1], "--autostart") == 0);
 
-    // 直接写入调试文件
-    FILE* debugLog = fopen("blackhole_debug.txt", "w");
+    // 直接写入调试文件（放在 exe 所在目录）
+    char debugPath[MAX_PATH];
+    snprintf(debugPath, MAX_PATH, "%s\\blackhole_debug.txt", g_exeDir);
+    FILE* debugLog = fopen(debugPath, "w");
+    g_debugLog = debugLog;  // 让 CrashHandler 也能写入
     if (debugLog) {
         fprintf(debugLog, "========== BLACKHOLE START ==========\n");
         fprintf(debugLog, "[Init] isRenderer=%d, argc=%d\n", isRenderer, argc);
         if (argc >= 2) fprintf(debugLog, "[Init] argv[1]='%s'\n", argv[1]);
         fflush(debugLog);
     }
+    // 注册崩溃处理器（仅在 renderer 进程生效，monitor 不初始化 GPU 不需要）
+    if (isRenderer) {
+        SetUnhandledExceptionFilter(CrashHandler);
+    }
 
     // 主程序启动时杀掉旧的 blackhole 进程（避免新旧实例冲突）
     // --render 子进程不杀（它由 monitor 管理）
     if (!isRenderer) {
-        DWORD myPid = GetCurrentProcessId();
-        HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-        PROCESSENTRY32 pe = { sizeof(pe) };
-        if (Process32First(snap, &pe)) {
-            do {
-                if (stricmp(pe.szExeFile, "blackhole.exe") == 0 && pe.th32ProcessID != myPid) {
-                    HANDLE h = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
-                    if (h) { TerminateProcess(h, 0); CloseHandle(h); }
-                }
-            } while (Process32Next(snap, &pe));
-        }
-        CloseHandle(snap);
+        KillOtherBlackholeProcesses();
         Sleep(200);
     }
 
@@ -687,9 +758,7 @@ int main(int argc, char* argv[]) {
         // === CONFIG ONLY: show config panel, save and exit ===
         if (!glfwInit()) { fprintf(stderr, "glfwInit failed\n"); return 1; }
         if (!GUI_ShowConfigPanel(cfg)) { glfwTerminate(); return 0; }
-        // Save config and exit
-        char names[64][64] = {};
-        SavePresetsToFile(cfg, names);
+        // Config already saved inside GUI_ShowConfigPanel via "启动" button
         glfwTerminate();
         return 0;
     } else {
@@ -697,18 +766,17 @@ int main(int argc, char* argv[]) {
         char selfPath[MAX_PATH];
         GetModuleFileNameA(NULL, selfPath, MAX_PATH);
 
-        if (isMonitor) {
-            // --monitor: skip config panel, load from file
+        if (isMonitor || isAutostart) {
+            // --monitor / --autostart: skip config panel, load from file
             char names[64][64];
             if (!LoadPresetsFromFile(cfg, names))
                 InitDefaultPresets(cfg);
-            if (debugLog) { fprintf(debugLog, "[Monitor] loaded idleSec=%d mode=%d\n", cfg.idleSec, cfg.mode); fflush(debugLog); }
+            if (debugLog) { fprintf(debugLog, "[Monitor] loaded idleSec=%d mode=%d autostart=%d\n", cfg.idleSec, cfg.mode, (int)isAutostart); fflush(debugLog); }
         } else {
             // Normal launch: show config panel first
             if (!glfwInit()) { fprintf(stderr, "glfwInit failed\n"); return 1; }
             if (!GUI_ShowConfigPanel(cfg)) { glfwTerminate(); return 0; }
-            char names[64][64] = {};
-            SavePresetsToFile(cfg, names);
+            // Config already saved inside GUI_ShowConfigPanel via "启动" button
             glfwTerminate();
         }
 
@@ -736,18 +804,23 @@ int main(int argc, char* argv[]) {
                 TrackPopupMenu(menu, TPM_RIGHTALIGN|TPM_BOTTOMALIGN, pt.x, pt.y, 0, h, NULL);
                 DestroyMenu(menu);
             }
-            if (m == WM_COMMAND && LOWORD(w) == ID_TRAY_EXIT)
+            if (m == WM_COMMAND && LOWORD(w) == ID_TRAY_EXIT) {
+                // 杀死渲染子进程，然后退出自身
+                MonitorKill();
                 PostQuitMessage(0);
+            }
             if (m == WM_COMMAND && LOWORD(w) == ID_TRAY_CONFIG) {
-                // 启动配置界面
+                // 杀死渲染子进程，启动新实例（新实例启动时会杀死本进程），然后退出
+                MonitorKill();
                 auto* pSelf = (char*)GetWindowLongPtrA(h, GWLP_USERDATA);
                 char cmd[MAX_PATH + 16];
-                snprintf(cmd, sizeof(cmd), "\"%s\" --config", pSelf);
+                snprintf(cmd, sizeof(cmd), "\"%s\"", pSelf);
                 STARTUPINFOA si = {}; si.cb = sizeof(si);
                 PROCESS_INFORMATION pi;
                 CreateProcessA(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
                 CloseHandle(pi.hProcess);
                 CloseHandle(pi.hThread);
+                PostQuitMessage(0);
             }
             if (m == WM_TIMER && w == 1) {
                 auto* pSelf = (char*)GetWindowLongPtrA(h, GWLP_USERDATA);
@@ -795,13 +868,25 @@ int main(int argc, char* argv[]) {
 
     // === OpenGL/WGL ===
 #ifndef BLACKHOLE_USE_D3D11
+    // ---- 着色器已内嵌于二进制，无需文件I/O ----
+    if (debugLog) { fprintf(debugLog, "[Init] Phase 0: Using embedded shaders (vert=%zu bytes)...\n", strlen(g_vert_src)); fflush(debugLog); }
+    std::string vertSrc = g_vert_src;
+    std::string fragSrc;
+    if (debugLog) { fprintf(debugLog, "[Init] Step C: building fragment shader string...\n"); fflush(debugLog); }
+    if (!buildFragmentShader(fragSrc, debugLog)) {
+        if (debugLog) { fprintf(debugLog, "[FAIL] buildFragmentShader failed!\n"); fclose(debugLog); debugLog = NULL; g_debugLog = NULL; }
+        return 1;
+    }
+    if (debugLog) { fprintf(debugLog, "[OK] Fragment shader string built (%zu bytes)\n", fragSrc.size()); fflush(debugLog); }
+
+    // ---- 【修复】现在才初始化 GPU（OpenGL/WGL + D3D11/WGC） ----
     // ---- Create fullscreen black hole window via Win32 + WGL ----
     char winTitle[64];
     snprintf(winTitle, sizeof(winTitle), "BH_%u", GetCurrentProcessId());
     Win32GL wgl;
     if (debugLog) { fprintf(debugLog, "[Init] Creating window...\n"); fflush(debugLog); }
     if (!Win32GL_Init(wgl, winTitle, 0, 0)) {
-        if (debugLog) { fprintf(debugLog, "[FAIL] Win32GL_Init failed!\n"); fclose(debugLog); }
+        if (debugLog) { fprintf(debugLog, "[FAIL] Win32GL_Init failed!\n"); fclose(debugLog); debugLog = NULL; g_debugLog = NULL; }
         return 1;
     }
     if (debugLog) { fprintf(debugLog, "[OK] Window created: %dx%d\n", wgl.width, wgl.height); fflush(debugLog); }
@@ -810,7 +895,7 @@ int main(int argc, char* argv[]) {
 
     if (debugLog) { fprintf(debugLog, "[Init] Loading GL functions...\n"); fflush(debugLog); }
     if (!loadGLFunctions()) {
-        if (debugLog) { fprintf(debugLog, "[FAIL] loadGLFunctions failed!\n"); fclose(debugLog); }
+        if (debugLog) { fprintf(debugLog, "[FAIL] loadGLFunctions failed!\n"); fclose(debugLog); debugLog = NULL; g_debugLog = NULL; }
         Win32GL_Shutdown(wgl); return 1;
     }
     if (debugLog) { fprintf(debugLog, "[OK] GL functions loaded\n"); fflush(debugLog); }
@@ -822,7 +907,7 @@ int main(int argc, char* argv[]) {
     if (debugLog) { fprintf(debugLog, "[Init] Initializing WGC capture...\n"); fflush(debugLog); }
     capOk = WGC_Init(wgc); capW=wgc.width; capH=wgc.height;
     if (!capOk) {
-        if (debugLog) { fprintf(debugLog, "[FAIL] WGC_Init failed!\n"); fclose(debugLog); }
+        if (debugLog) { fprintf(debugLog, "[FAIL] WGC_Init failed!\n"); fclose(debugLog); debugLog = NULL; g_debugLog = NULL; }
         Win32GL_Shutdown(wgl); return 1;
     }
     if (debugLog) { fprintf(debugLog, "[OK] WGC initialized: %dx%d\n", capW, capH); fflush(debugLog); }
@@ -830,30 +915,16 @@ int main(int argc, char* argv[]) {
     GLTextureUpload glTex;
     if (debugLog) { fprintf(debugLog, "[Init] Creating GL texture...\n"); fflush(debugLog); }
     if (!GLTex_Init(glTex, capW, capH)) {
-        if (debugLog) { fprintf(debugLog, "[FAIL] GLTex_Init failed!\n"); fclose(debugLog); }
+        if (debugLog) { fprintf(debugLog, "[FAIL] GLTex_Init failed!\n"); fclose(debugLog); debugLog = NULL; g_debugLog = NULL; }
         WGC_Release(wgc); Win32GL_Shutdown(wgl); return 1;
     }
     if (debugLog) { fprintf(debugLog, "[OK] GL texture created: ID=%u\n", glTex.tex); fflush(debugLog); }
 
-    // ---- Shader ----
-    if (debugLog) { fprintf(debugLog, "[Init] Loading shaders...\n"); fflush(debugLog); }
-    std::string vertSrc = readFile("shaders/vert.glsl");
-    std::string fragSrc;
-    if (vertSrc.empty()) {
-        if (debugLog) { fprintf(debugLog, "[FAIL] vert.glsl not found or empty!\n"); fclose(debugLog); }
-        GLTex_Shutdown(glTex); WGC_Release(wgc); Win32GL_Shutdown(wgl); return 1;
-    }
-    if (debugLog) { fprintf(debugLog, "[OK] vert.glsl loaded (%zu bytes)\n", vertSrc.size()); fflush(debugLog); }
-    
-    if (!buildFragmentShader(fragSrc, debugLog)) {
-        if (debugLog) { fprintf(debugLog, "[FAIL] buildFragmentShader failed!\n"); fclose(debugLog); }
-        GLTex_Shutdown(glTex); WGC_Release(wgc); Win32GL_Shutdown(wgl); return 1;
-    }
-    if (debugLog) { fprintf(debugLog, "[OK] Fragment shader built (%zu bytes)\n", fragSrc.size()); fflush(debugLog); }
-    
+    // ---- Shader compilation (使用已经读取好的 shader 字符串) ----
+    if (debugLog) { fprintf(debugLog, "[Init] Step D: compiling shader program...\n"); fflush(debugLog); }
     GLuint program = createProgram(vertSrc, fragSrc, debugLog);
     if (!program) { 
-        if (debugLog) { fprintf(debugLog, "[CRITICAL] Shader program creation FAILED!\n"); fclose(debugLog); }
+        if (debugLog) { fprintf(debugLog, "[CRITICAL] Shader program creation FAILED!\n"); fclose(debugLog); debugLog = NULL; g_debugLog = NULL; }
         GLTex_Shutdown(glTex); WGC_Release(wgc); Win32GL_Shutdown(wgl); return 1; 
     }
     if (debugLog) { fprintf(debugLog, "[OK] Shader program created (ID=%u)\n", program); fflush(debugLog); }
@@ -903,15 +974,17 @@ int main(int argc, char* argv[]) {
     GLint locPhase  = gl_GetUniformLocation(program, "uRandPhase");
     GLint locPresetOff = gl_GetUniformLocation(program, "uPresetOffset");
 
-    // ---- 随机化初始位置、轨迹和预设 ----
+    // ---- 随机化初始位置、轨迹，预设从上次选中的开始 ----
     srand((unsigned)time(nullptr));
     // 随机出生位置：避免边缘，范围 [0.15, 0.85]
     float randHomeX = 0.15f + 0.70f * (float)rand() / (float)RAND_MAX;
     float randHomeY = 0.15f + 0.70f * (float)rand() / (float)RAND_MAX;
     // 随机轨迹相位：0 ~ 2π
     float randPhase = 6.2831853f * (float)rand() / (float)RAND_MAX;
-    // 随机预设偏移：0 ~ 60秒（覆盖多个预设周期）
-    float randPresetOff = 60.0f * (float)rand() / (float)RAND_MAX;
+    // 预设偏移：从用户上次选中的预设开始播放
+    float randPresetOff = (cfg.selPreset > 0 && cfg.selPreset < cfg.presetCount)
+        ? (float)cfg.selPreset * cfg.slotSec
+        : 60.0f * (float)rand() / (float)RAND_MAX;
     if (debugLog) { fprintf(debugLog, "[Init] Random spawn: home=(%.2f,%.2f) phase=%.2f presetOff=%.1f\n",
                             randHomeX, randHomeY, randPhase, randPresetOff); fflush(debugLog); }
 
@@ -1016,7 +1089,7 @@ int main(int argc, char* argv[]) {
     // 不再隐藏系统光标 — WGC 已通过 IsCursorCaptureEnabled=false 禁用光标捕获，
     // 捕获的纹理不含光标，不会出现双重光标，系统光标始终保持正常可用
     
-    if (debugLog) { fprintf(debugLog, "[OK] Ready, entering main loop\n"); fclose(debugLog); debugLog = nullptr; }
+    if (debugLog) { fprintf(debugLog, "[OK] Ready, entering main loop\n"); fclose(debugLog); debugLog = nullptr; g_debugLog = nullptr; }
 
     // ---- Main loop ----
     double startTime = Win32GL_GetTime();
