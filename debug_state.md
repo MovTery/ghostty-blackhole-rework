@@ -465,3 +465,22 @@ program link 失败 → fallback/空输出/旧 shader 残留
 - WGL 3.3: 需要 WDDM 2.0+, 但 WGC 要求 D3D11 FL 11.0 → 实际要求 WDDM 2.4+
 - D3D11 FL 11_0: WGC 内部使用 D3D11 纹理, capture_wgc.cpp 创建 D3D_FEATURE_LEVEL_11_0 设备
 - Qt 6.8: Blakhole_UI CMake 中 qt_standard_project_setup(REQUIRES 6.8)
+
+---
+
+## README 显卡兼容性细化 (2026-07-02)
+
+### 更新内容
+从笼统的"OpenGL 3.3 + D3D11 FL 11_0"细化为：
+
+- **桌面独显**: NVIDIA GTX 400+ / AMD HD 7000+ / Intel Arc — 完全支持
+- **集显**: Intel HD 4000+ / UHD/Iris Xe / AMD Vega/RDNA2+ — 可用/良好
+- **混合显卡**: NVIDIA Optimus / AMD Switchable Graphics — 可用
+- **原理**: CPU 回读路径 (Staging→Map→glTexSubImage2D) 天然隔离 GPU 差异
+
+### 分析依据
+- D3D11CreateDevice(nullptr, ...) 传入 nullptr adapter → 系统默认 GPU（笔记本为核显）
+- capture_wgc.cpp 注释: "Cross-GPU (NVIDIA / AMD / Intel)"
+- gl_texture.cpp 注释: "Cross-vendor D3D11-to-OpenGL texture upload"
+- CPU 回读路径不依赖 GPU 间纹理共享，数据经系统内存
+- ImGui 内置 Intel OpenGL 驱动兼容处理 (imgui_impl_opengl3.cpp:346)

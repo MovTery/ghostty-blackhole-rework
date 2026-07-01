@@ -26,13 +26,13 @@
 
 [OK] Program linked (ID=3)
 [OK] Shader program created (ID=3)
-[Init] Random spawn: home=(0.31,0.85) phase=1.11 presetOff=30.9
+[Init] Random spawn: home=(0.66,0.38) phase=4.74 presetOff=2.1
 [Init] Warming up WGC capture...
-[Warmup] Frame 1/5 (2560x1600) sum=8800
-[Warmup] Frame 2/5 (2560x1600) sum=8800
-[Warmup] Frame 3/5 (2560x1600) sum=8800
-[Warmup] Frame 4/5 (2560x1600) sum=8800
-[Warmup] Frame 5/5 (2560x1600) sum=8800
+[Warmup] Frame 1/5 (2560x1600) sum=8775
+[Warmup] Frame 2/5 (2560x1600) sum=8775
+[Warmup] Frame 3/5 (2560x1600) sum=8775
+[Warmup] Frame 4/5 (2560x1600) sum=8775
+[Warmup] Frame 5/5 (2560x1600) sum=8775
 [OK] WGC warmup complete: 5 frames
 [Init] Showing window...
 [OK] Ready, entering main loop
