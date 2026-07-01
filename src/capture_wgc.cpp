@@ -16,7 +16,8 @@
 
 // WinRT ABI headers (MinGW WIDL-generated)
 #include <windows.graphics.capture.h>
-#include <windows.graphics.capture.interop.h>
+// windows.graphics.capture.interop.h -- not always present in MSYS2 WIDL;
+// define locally (same pattern as IDirect3DDxgiInterfaceAccess below).
 #include <windows.graphics.directx.direct3d11.h>
 
 
@@ -28,6 +29,18 @@ struct IDirect3DDxgiInterfaceAccess : public IUnknown
 {
     virtual HRESULT STDMETHODCALLTYPE GetInterface(
         REFIID riid, void **p) = 0;
+};
+
+// IGraphicsCaptureItemInterop -- not in all MSYS2 WIDL headers
+// {3628E81D-3C87-4C60-9C96-3DCC167CBEC4}
+static const GUID IID_IGraphicsCaptureItemInterop = {
+    0x3628E81D, 0x3C87, 0x4C60, {0x9C,0x96, 0x3D,0xCC,0x16,0x7C,0xBE,0xC4}};
+struct IGraphicsCaptureItemInterop : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE CreateForWindow(
+        HWND hwnd, REFIID riid, void **result) = 0;
+    virtual HRESULT STDMETHODCALLTYPE CreateForMonitor(
+        HMONITOR hmon, REFIID riid, void **result) = 0;
 };
 
 // ---- Convenience namespace aliases ----
